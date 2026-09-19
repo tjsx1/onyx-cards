@@ -25,7 +25,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.15.0';
+const ONYX_VERSION = '1.16.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -1549,7 +1549,8 @@ class OnyxBase extends HTMLElement {
   /** Freundliche Fehlerkarte statt einer weissen Fläche */
   _error(err) {
     this.shadowRoot.innerHTML =
-      `<style>${BASE_CSS}</style><ha-card><div style="color:#c0392b;font-size:13px">
+      `<style>${BASE_CSS}</style><ha-card><div class="onyx-error"
+       style="color:#c0392b;font-size:13px">
        Onyx: ${esc(err.message)}</div></ha-card>`;
   }
 
@@ -1735,6 +1736,10 @@ function paletteFromHex(hex) {
  * ------------------------------------------------------------------ */
 const PAL_CSS = `
 ha-card{ --w1:#0d1b2e; --w2:#113a52; --acc:#8ad2f2; --sub:#6ba8cc; --lab:#6f9fc0; --btn:#2fa8f0; }
+/* Die Farbe des Betriebs. Ohne Betrieb ist sie die Kartenfarbe — wer sie
+   nicht setzt, sieht alles wie bisher. Beim Heizen und Kühlen wird sie an
+   der Karte überschrieben, und Ring, Wort und Modusknopf ziehen mit. */
+ha-card{ --ring: var(--btn); --ink: var(--acc); }
 ha-card.p-gruen  { --w1:#0d2419; --w2:#12452e; --acc:#7fe0ab; --sub:#6bbf95; --lab:#6fa88c;
                    --btn:#2fc48a; }
 ha-card.p-gelb   { --w1:#2b2410; --w2:#4d411a; --acc:#f0d27a; --sub:#cbb26a; --lab:#b3a074;
@@ -1799,6 +1804,17 @@ function paletteAttrs(color, cfg) {
   if (!key) throw new Error(
     t('err.color', { c: color, list: [...new Set(Object.values(PALETTES))].join(', ') }));
   return { cls: (key === 'blau' ? '' : ' p-' + key) + grund, style: '' };
+}
+
+/**
+ * Zwei Inline-Stile zusammenlegen. `paletteAttrs` liefert seinen schon als
+ * fertiges Attribut; wer einen zweiten dazulegen will, ginge sonst an zwei
+ * Stellen mit dem Messer an denselben String.
+ */
+function mergeStyle(attr, extra) {
+  if (!extra) return attr || '';
+  if (!attr) return ` style="${extra}"`;
+  return ` style="${extra}${attr.slice(8, -1)}"`;
 }
 
 /** Erste Entität einer Domain — für die Startkonfiguration aus der Kartenauswahl */
@@ -2064,6 +2080,104 @@ class OnyxRoomCard extends OnyxBase {
              border-color:color-mix(in srgb, var(--btn) 65%, transparent);
              color:#fff; font-weight:600; }
     .fxi.held{ opacity:.6; }
+    /* ---------------------------------------------------------------- *
+       Die Klima-Gruppe: kein Zeilenpaar, sondern der Ring selbst.
+       Kleiner als in der Klima-Karte — er sitzt hier unter einer Kopfzeile,
+       einer Knopfreihe und einer Trennlinie und muss sich das Blatt mit
+       ihnen teilen. Die Bauteile heissen wie dort, damit der gemeinsame
+       Unterbau in beiden Karten dieselben Klassen findet.
+       ---------------------------------------------------------------- */
+    .klima{ display:flex; flex-direction:column; gap:9px; }
+    .grp.akt b{ color:var(--ink); }
+
+    .klima .dial{ position:relative; width:100%; aspect-ratio:1/.78; display:grid;
+           place-items:center; margin:-2px 0 -4px; touch-action:none;
+           cursor:pointer; }
+    .klima .dial svg{ position:absolute; inset:0; width:100%; height:100%; }
+    .klima .cen{ position:relative; text-align:center; line-height:1;
+          padding:2px 40px 22px; box-sizing:border-box; max-width:100%;
+          pointer-events:none; }
+    .klima .soll{ font-size:38px; font-weight:300; letter-spacing:-.035em; color:#fff;
+           font-variant-numeric:tabular-nums; }
+    .klima .soll sup{ font-size:15px; font-weight:400; vertical-align:top; top:.5em;
+               position:relative; }
+    .klima .soll.zwei{ font-size:25px; letter-spacing:-.02em; }
+    .klima .soll.zwei sup{ font-size:12px; top:.35em; }
+    .klima .soll.aus{ color:#8ea3b5; }
+    .klima .act{ font-size:11.5px; color:var(--sub); margin-top:7px; }
+    .klima .act b{ color:var(--ink); font-weight:600; }
+    .klima .pre{ font-size:10px; color:var(--lab); margin-top:3px; text-transform:uppercase;
+          letter-spacing:.08em; }
+    .klima .pm{ position:absolute; bottom:0; width:32px; height:32px; border-radius:50%;
+         background:linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.045));
+         -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
+         border:1px solid rgba(255,255,255,.11); display:grid; place-items:center;
+         color:#fff; --mdc-icon-size:16px; cursor:pointer;
+         transition:transform .12s ease; }
+    .klima .pm.minus{ left:2px; } .pm.plus{ right:2px; }
+    .klima .pm.held{ transform:scale(.9); }
+    .klima .pm[disabled]{ opacity:.3; cursor:default; }
+
+    .klima .modes{ display:flex; gap:6px; }
+    .klima .mode{ flex:1; min-width:0; height:38px; border-radius:11px;
+           background:rgba(255,255,255,.055); border:1px solid transparent;
+           display:flex; flex-direction:column; align-items:center;
+           justify-content:center; gap:1px; font-size:9.5px; color:#a8c2d4;
+           --mdc-icon-size:16px; cursor:pointer;
+           transition:transform .12s ease, background .18s ease; }
+    .klima .mode span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                max-width:100%; }
+    /* Der aktive Knopf zieht mit dem Ring mit — die Voreinstellungen
+       darunter bleiben in der Kartenfarbe, sie sagen nichts über Heizen. */
+    .klima .mode.on{ background:color-mix(in srgb, var(--ring) 55%, transparent);
+              border-color:color-mix(in srgb, var(--ring) 72%, transparent);
+              color:#fff; }
+    .klima .mode.held{ transform:scale(.95); }
+
+    .klima .pills{ display:flex; gap:6px; flex-wrap:wrap; }
+    .klima .pill{ height:26px; padding:0 10px 0 8px; border-radius:99px; font-size:11px;
+           font-weight:600; background:rgba(255,255,255,.05);
+           border:1px solid rgba(255,255,255,.08); color:#c3ccd6; cursor:pointer;
+           display:flex; align-items:center; gap:5px; --mdc-icon-size:13px;
+           min-width:0; max-width:100%; transition:transform .12s ease; }
+    .klima .pill span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .klima .pill.on{ background:color-mix(in srgb, var(--btn) 55%, transparent);
+              border-color:color-mix(in srgb, var(--btn) 72%, transparent);
+              color:#fff; }
+    .klima .pill.held{ transform:scale(.95); }
+
+    /* Der Umschalter zwischen mehreren Thermostaten. Absichtlich nicht in
+       der Kartenfarbe: er wählt aus, er schaltet nichts. Der Punkt links
+       sagt, ob dieses Gerät gerade arbeitet. */
+    .klima .pick{ display:flex; gap:6px; }
+    .klima .pk{ flex:1; min-width:0; height:30px; border-radius:9px; display:flex;
+         align-items:center; justify-content:center; gap:5px; font-size:11px;
+         color:#8ea3b5; background:rgba(255,255,255,.05);
+         border:1px solid rgba(255,255,255,.07); cursor:pointer;
+         transition:transform .12s ease, background .18s ease; }
+    .klima .pk span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .klima .pk.on{ background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.18);
+            color:#e6eef5; font-weight:600; }
+    .klima .pk .dot{ width:6px; height:6px; border-radius:50%; flex:none;
+              background:var(--ring); }
+    .klima .pk.kalt .dot{ background:rgba(255,255,255,.22); }
+    .klima .pk.held{ transform:scale(.96); }
+
+    /* Auf einer halben Spalte wird der Ring quadratisch — sonst laufen die
+       Zahl, die Zeile darunter und die beiden Knöpfe ineinander. */
+    @container (max-width: 270px){
+      .klima .dial{ aspect-ratio:1/1; }
+      .klima .soll{ font-size:27px; }
+      .klima .soll.zwei{ font-size:18px; }
+      .klima .act{ font-size:11px; margin-top:5px; }
+      .klima .act .nowv{ display:none; }
+      .klima .pre{ display:none; }
+      .klima .pm{ width:28px; height:28px; --mdc-icon-size:15px; }
+      .klima .mode{ height:34px; font-size:0; gap:0; }
+      .klima .mode ha-icon{ --mdc-icon-size:18px; }
+      .klima .pill{ padding:0 8px; }
+    }
+
     /* Wasser: eine Überschrift, die Zeitpläne und die Verbrauchskacheln.
        Die Überschrift gibt es nur hier — bei Licht und Store steht unter
        dem Winkel jeweils nur eine Sorte Bedienelement, hier drei. */
@@ -2108,26 +2222,29 @@ class OnyxRoomCard extends OnyxBase {
     .mbtn.held{ opacity:.6; }
     .mbtn.aus{ opacity:.35; pointer-events:none; }
 
-    /* Knöpfe unter den Zeilen, paarweise nebeneinander */
-    .acts{ display:flex; gap:7px; }
-    .act{ flex:1; min-width:0; height:42px; border-radius:12px;
+    /* Knöpfe unter den Zeilen, paarweise nebeneinander. Sie hiessen einmal
+       act — bis die Klima-Gruppe den Ring bekam, dessen Zeile unter der Zahl
+       in beiden Karten act heisst. Zwei Bedeutungen für einen Namen im
+       selben Blatt gingen nicht gut. */
+    .rbtns{ display:flex; gap:7px; }
+    .rbtn{ flex:1; min-width:0; height:42px; border-radius:12px;
           background:rgba(255,255,255,.055); border:1px solid transparent;
           display:flex; align-items:center; justify-content:center; gap:7px;
           padding:0 6px; font-size:12.5px; font-weight:500; color:#a8c2d4;
           cursor:pointer; --mdc-icon-size:15px;
           transition:transform .12s ease, background .18s ease; }
-    .act ha-icon{ flex:none; }
-    .act span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .act.on{ background:color-mix(in srgb, var(--btn) 55%, transparent);
+    .rbtn ha-icon{ flex:none; }
+    .rbtn span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rbtn.on{ background:color-mix(in srgb, var(--btn) 55%, transparent);
              border-color:color-mix(in srgb, var(--btn) 72%, transparent); color:#fff; }
-    .act.held{ transform:scale(.97); }
+    .rbtn.held{ transform:scale(.97); }
     /* Auf einer halben Spalte würden aus "Alle rauf" und "Alle runter"
        zweimal "Alle r…". Dort steht deshalb die kurze Beschriftung. */
-    .act .sm{ display:none; }
+    .rbtn .sm{ display:none; }
     @container (max-width: 270px){
-      .act{ font-size:12px; gap:5px; padding:0 4px; }
-      .act .lg{ display:none; }
-      .act .sm{ display:inline; }
+      .rbtn{ font-size:12px; gap:5px; padding:0 4px; }
+      .rbtn .lg{ display:none; }
+      .rbtn .sm{ display:inline; }
     }
     `;
   }
@@ -2159,6 +2276,8 @@ class OnyxRoomCard extends OnyxBase {
     this._hPick = config.history_picker === true;
     // Welche Zeile aufgeklappt ist, überlebt eine neue Konfiguration nicht.
     this._offen = null;
+    // Und auch nicht, welches Thermostat der Ring zeigte.
+    this._klima = null;
     // Neuer Sensor oder neues Zeitfenster: der alte Verlauf gilt nicht mehr.
     this._histKey = null;
     this._hist = null;
@@ -2312,6 +2431,10 @@ class OnyxRoomCard extends OnyxBase {
       hum: readOut(humId),
       groups,
       open: this._open,
+      // Die Klima-Gruppe zeigt nicht Zeilen, sondern gleich den Ring des
+      // gewählten Thermostats — eine Zeile könnte dort nichts, was der Ring
+      // nicht besser kann.
+      klima: this._klimaModell(groups),
       auto: this._flagOf(cfg.cover_auto),
       wind: this._flagOf(cfg.cover_wind),
       path: cfg.navigation_path || null,
@@ -2320,6 +2443,47 @@ class OnyxRoomCard extends OnyxBase {
       // und zeichnete ihn nie.
       spark: this._histAt || 0
     };
+  }
+
+  /**
+   * Die Klima-Gruppe, aufgeklappt: der Ring eines Thermostats statt einer
+   * Liste von Zeilen.
+   *
+   * Bei mehreren Thermostaten steht darüber ein Umschalter — dieselbe Idee
+   * wie der Streifen unter dem Kamerabild. Welches gewählt ist, hält
+   * `_klima`; ohne Wahl gilt das erste. Verschwindet das gewählte aus der
+   * Konfiguration, fällt die Karte auf das erste zurück statt leer zu
+   * bleiben.
+   */
+  _klimaModell(groups) {
+    if (this._open !== 'climate') return null;
+    const grp = groups.find((g) => g.domain === 'climate');
+    if (!grp || !grp.items.length) return null;
+
+    const liste = grp.items.map((it) => ({
+      id: it.id, name: it.name, laeuft: it.on, dead: it.dead
+    }));
+    const gewaehlt = liste.some((x) => x.id === this._klima)
+      ? this._klima : liste[0].id;
+
+    let mod = null;
+    try {
+      // Der eigene Name aus der Liste schlägt den der Entität, und die
+      // Sensoren der Karte gelten auch hier — sonst stünde im Ring eine
+      // andere Ist-Temperatur als oben rechts.
+      const eintrag = grp.items.find((x) => x.id === gewaehlt) || {};
+      mod = CL.model(this._hass, {
+        name: eintrag.name,
+        action_color: this._config.action_color,
+        show_presets: this._config.show_presets,
+        show_fan: this._config.show_fan
+      }, gewaehlt);
+    } catch (err) {
+      // Ein Thermostat, das Home Assistant gerade nicht kennt, darf die
+      // Raum-Karte nicht kosten — dann bleibt die Gruppe eben bei Zeilen.
+      return null;
+    }
+    return { gewaehlt, liste, mod };
   }
 
   /**
@@ -2650,7 +2814,7 @@ class OnyxRoomCard extends OnyxBase {
     // Höhe des Bands: ohne diese Liste stünde die Blase über dem Raumnamen,
     // sobald die Maus auf dem Lichtknopf liegt, und sperrte dabei den
     // Neuaufbau der Karte.
-    const knoepfe = '.hleft, .gbtn, .act, .lrow, .fav';
+    const knoepfe = '.hleft, .gbtn, .rbtn, .lrow, .fav, .dial, .pm, .mode, .pill, .pk';
 
     karte.addEventListener('pointerdown', (ev) => {
       if (ev.button != null && ev.button > 0) return;
@@ -2723,6 +2887,39 @@ class OnyxRoomCard extends OnyxBase {
       return `${one(it.temp)} → ${one(it.target)} °C`;
     }
     return it.state;
+  }
+
+  /** Was rechts in der Kopfzeile steht, wenn nur ein Thermostat da ist */
+  _klimaKurz(mod) {
+    if (!mod) return '';
+    if (mod.dead) return t('unavailable');
+    const tun = mod.aktion ? t('cl.a.' + mod.aktion, null, mod.aktion)
+      : mod.modus === 'off' ? t('off') : t('cl.m.' + mod.modus, null, mod.modus);
+    if (mod.modus === 'off' || mod.soll == null) return tun;
+    return `${tun} · ${nfmt(mod.soll, mod.soll % 1 ? 1 : 0)} °C`;
+  }
+
+  /**
+   * Der Ring der Klima-Gruppe. Der Umschalter erscheint erst ab dem
+   * zweiten Thermostat — bei einem wäre er ein Knopf ohne Wahl.
+   *
+   * Die Farbe des Betriebs steht auf dem Feld, nicht auf der Karte: der
+   * Grund gehört dem Raum, an dem auch Licht und Storen hängen. So färben
+   * sich Ring, Wort und Modusknopf, und der Raum bleibt der Raum.
+   */
+  _klimaPanel(k) {
+    const m = k.mod;
+    const pick = k.liste.length > 1 ? `
+      <div class="pick">
+        ${k.liste.map((x) => `
+          <div class="pk ${x.id === k.gewaehlt ? 'on' : ''} ${x.laeuft ? '' : 'kalt'}"
+               data-klima="${esc(x.id)}">
+            <i class="dot"></i><span>${esc(x.name)}</span>
+          </div>`).join('')}
+      </div>` : '';
+    return `<div class="klima">
+      ${pick}${CL.dial(m)}${CL.modes(m)}${CL.presets(m)}${CL.fans(m)}
+    </div>`;
   }
 
   /**
@@ -2870,12 +3067,12 @@ class OnyxRoomCard extends OnyxBase {
 
   _actions(m, og) {
     const btn = (id, icon, key, on) => `
-      <div class="act${on ? ' on' : ''}" data-act="${id}">
+      <div class="rbtn${on ? ' on' : ''}" data-act="${id}">
         <ha-icon icon="${icon}"></ha-icon
         ><span class="lg">${esc(t(key))}</span
         ><span class="sm">${esc(t(key + 'Short'))}</span>
       </div>`;
-    const reihe = (inner) => `<div class="acts">${inner}</div>`;
+    const reihe = (inner) => `<div class="rbtns">${inner}</div>`;
 
     if (og.domain === 'light') {
       return reihe(btn('allon', 'mdi:lightbulb-on', 'turnAllOn')
@@ -3054,16 +3251,24 @@ class OnyxRoomCard extends OnyxBase {
         ${it.offen ? this._panel(it) : ''}`;
       }).join('');
 
+      // Die Klima-Gruppe zeigt keine Zeilen. Bei einem Thermostat steht
+      // rechts, was es tut, statt „1 von 1 aktiv" — bei mehreren zählt die
+      // Kopfzeile wie überall.
+      const klima = og.domain === 'climate' && m.klima;
+      const kopfWert = klima && m.klima.liste.length === 1
+        ? this._klimaKurz(m.klima.mod)
+        : t(og.domain === 'cover' ? 'nOfMShut'
+            : og.domain === 'devices' ? 'nOfMRun'
+            : og.domain === 'water' ? 'nOfMOpen' : 'nOfMOn',
+            { n: og.meldeCount, m: og.items.length });
+
       panel = `
       <div class="divide"></div>
-      <div class="grp">
+      <div class="grp${klima ? ' akt' : ''}">
         <span>${esc(t('inRoom', { g: t('group.' + og.domain) }))}</span>
-        <b>${esc(t(og.domain === 'cover' ? 'nOfMShut'
-                     : og.domain === 'devices' ? 'nOfMRun'
-                     : og.domain === 'water' ? 'nOfMOpen' : 'nOfMOn',
-                     { n: og.meldeCount, m: og.items.length }))}</b>
+        <b>${esc(kopfWert)}</b>
       </div>
-      <div class="rows">${rows}</div>
+      ${klima ? this._klimaPanel(m.klima) : `<div class="rows">${rows}</div>`}
       ${this._actions(m, og)}`;
     }
 
@@ -3074,8 +3279,14 @@ class OnyxRoomCard extends OnyxBase {
     // legt die Geometrie an, an der die Blase weiter unten hängt.
     const flaeche = this._spark();
 
+    // Die Farbe des Betriebs steht auf der Karte, nicht im Klima-Feld: die
+    // Gruppenzeile darüber liest sie mit, und sie steht ausserhalb. Den
+    // Grund der Karte färbt sie nicht — der gehört dem Raum.
+    const stil = mergeStyle(style,
+      m.klima ? CL.farbStil(m.klima.mod) : '');
+
     return `
-    <ha-card class="${anyOn ? 'warm' : ''}${pal}"${style}>
+    <ha-card class="${anyOn ? 'warm' : ''}${pal}"${stil}>
       ${flaeche}
       ${this._hGeo ? '<div class="sbub" id="sbub" hidden></div>' : ''}
       <div class="head">
@@ -3193,6 +3404,21 @@ class OnyxRoomCard extends OnyxBase {
 
     this._bindPanel(m);
 
+    // Die Klima-Gruppe bringt keine Zeilen mit, sondern den Ring. Ziehen,
+    // die zwei Knöpfe und die Betriebsarten liegen im gemeinsamen Unterbau;
+    // hier kommt nur der Umschalter zwischen den Thermostaten dazu.
+    if (m.klima) {
+      const id = m.klima.mod.id;
+      CL.bindDial(this, m.klima.mod, root, () => fireMoreInfo(this, id));
+      CL.bindButtons(this, m.klima.mod, root);
+      root.querySelectorAll('[data-klima]').forEach((el) => {
+        this._press(el, {
+          onTap: () => { this._klima = el.dataset.klima; this._repaint(); },
+          onHold: () => fireMoreInfo(this, el.dataset.klima)
+        });
+      });
+    }
+
     root.querySelectorAll('.lrow').forEach((row) => {
       const id = row.dataset.ent;
       const domain = row.dataset.dom;
@@ -3222,7 +3448,7 @@ class OnyxRoomCard extends OnyxBase {
       });
     });
 
-    root.querySelectorAll('.act[data-act]').forEach((el) => {
+    root.querySelectorAll('.rbtn[data-act]').forEach((el) => {
       const was = el.dataset.act;
       const grp = m.groups.find((g) => g.domain === m.open);
       this._press(el, { onTap: () => this._doAction(was, grp, m) });
@@ -8571,6 +8797,332 @@ const CL_FAN = {
   high: 'mdi:fan-speed-3', off: 'mdi:fan-off', on: 'mdi:fan'
 };
 
+/** Was zählt als „arbeitet gerade" */
+const CL_RUNS = ['heating', 'cooling', 'drying', 'fan', 'preheating', 'defrosting'];
+
+/**
+ * Die Farbe des Betriebs: der Ring nimmt an, was das Gerät gerade tut.
+ *
+ * Gefärbt wird nach `hvac_action`, nicht nach dem eingestellten Modus. Der
+ * Modus sagt, was gewünscht ist; die Aktion sagt, was passiert. Ein
+ * Thermostat auf `auto` stünde sonst orange da, während es kühlt, und eines
+ * auf Heizen, das seine Solltemperatur längst erreicht hat, stünde orange
+ * da, obwohl es gerade gar nichts tut.
+ *
+ * `ring` ist der satte Ton für Fläche und Strich, `ink` der hellere für
+ * Schrift auf dunklem Grund — dieselbe Teilung wie `--btn` und `--acc` in
+ * den Paletten.
+ */
+const CL_ACT_FARBE = {
+  heating:    { ring: '#f0913c', ink: '#f0ac74' },   // wie die Palette orange
+  preheating: { ring: '#f0913c', ink: '#f0ac74' },
+  cooling:    { ring: '#2fa8f0', ink: '#8ad2f2' },   // wie blau
+  defrosting: { ring: '#2fa8f0', ink: '#8ad2f2' },
+  drying:     { ring: '#e8c34a', ink: '#f0d27a' },   // wie gelb
+  fan:        { ring: '#8ea3b5', ink: '#a8c2d4' }    // keine Palette: neutral
+};
+
+/**
+ * Der gemeinsame Unterbau der Klima-Bedienung.
+ *
+ * Ring, Zahl, Betriebsarten und das Ziehen daran brauchen die Klima-Karte
+ * und die Klima-Gruppe der Raum-Karte gleichermassen. Beim Lampenpanel
+ * haben wir das damals kopiert und tragen die zweite Fassung seither mit;
+ * hier steht es einmal. Wo Ereignisse nötig sind, wird die Karte als
+ * `host` übergeben — sie bringt `_press` und `call` mit.
+ */
+const CL = {
+  /** Das Modell einer Klima-Entität. `cfg` darf leer sein. */
+  model(hass, cfg, id) {
+    const c = cfg || {};
+    const st = hass.states[id];
+    if (!st) throw new Error(t('err.entity', { id }));
+    const a = st.attributes;
+    const dead = isDead(st);
+
+    const step = Number(a.target_temp_step) || 0.5;
+    const min = a.min_temp == null ? 7 : Number(a.min_temp);
+    const max = a.max_temp == null ? 35 : Number(a.max_temp);
+
+    // Ein Gerät im Auto-Betrieb nennt zwei Sollwerte statt einem
+    const low = a.target_temp_low == null ? null : Number(a.target_temp_low);
+    const high = a.target_temp_high == null ? null : Number(a.target_temp_high);
+    const zwei = low != null && high != null;
+    const soll = a.temperature == null ? null : Number(a.temperature);
+
+    const ist = c.temperature && hass.states[c.temperature]
+      ? Number(hass.states[c.temperature].state)
+      : (a.current_temperature == null ? null : Number(a.current_temperature));
+    const feucht = c.humidity && hass.states[c.humidity]
+      ? Number(hass.states[c.humidity].state)
+      : (a.current_humidity == null ? null : Number(a.current_humidity));
+
+    const modus = st.state;
+    const aktion = a.hvac_action || null;
+    // Was tut das Gerät gerade? `hvac_action` weiss es genau; fehlt sie,
+    // schliessen wir vom Betriebsmodus auf das Wahrscheinliche.
+    const laeuft = aktion ? CL_RUNS.includes(aktion) : modus !== 'off';
+
+    const modi = (a.hvac_modes || []).filter((m) => CL_MODES[m]);
+    const presets = c.show_presets === false ? []
+      : (a.preset_modes || []).filter(Boolean);
+    const fans = c.show_fan === false ? [] : (a.fan_modes || []).filter(Boolean);
+
+    return {
+      id,
+      name: c.name || nameOf(hass, id),
+      label: c.label || t('cl'),
+      icon: c.icon || (aktion === 'cooling' ? 'mdi:snowflake' : 'mdi:radiator'),
+      color: c.color || CL.autoColor(aktion, modus),
+      // Die Farbe des Betriebs gibt es nur, während wirklich etwas läuft.
+      // `action_color: false` schaltet sie ab — für den, dem eine Karte
+      // lieber in einem Ton bleibt.
+      akt: c.action_color === false || dead || !laeuft
+        ? null : (CL_ACT_FARBE[aktion] || null),
+      dead, min, max, step, zwei, soll, low, high, ist, feucht,
+      modus, aktion, laeuft,
+      modi: c.show_modes === false ? [] : modi,
+      preset: a.preset_mode || null, presets,
+      fan: a.fan_mode || null, fans
+    };
+  },
+
+  /**
+   * Ohne eigene Farbe färbt sich die Karte nach dem, was gerade passiert:
+   * warm beim Heizen, kalt beim Kühlen, sonst neutral blau.
+   */
+  autoColor(aktion, modus) {
+    if (aktion === 'heating' || (!aktion && modus === 'heat')) return 'orange';
+    if (aktion === 'cooling' || (!aktion && modus === 'cool')) return 'blau';
+    // Entfeuchten war einmal grün. Gelb sagt es besser, und vor allem sagt
+    // es dasselbe wie der Ring — zwei Farben für einen Betrieb wären eine
+    // Erklärung zu viel.
+    if (aktion === 'drying' || (!aktion && modus === 'dry')) return 'gelb';
+    return 'blau';
+  },
+
+  /** Die beiden Farbvariablen als Inline-Stil — oder nichts */
+  farbStil(m) {
+    return m.akt ? `--ring:${m.akt.ring};--ink:${m.akt.ink};` : '';
+  },
+
+  /** Temperatur → Winkel auf dem Bogen */
+  deg(m, v) {
+    return CL_START + CL_SPAN * clamp((v - m.min) / (m.max - m.min), 0, 1);
+  },
+
+  ring(m) {
+    const farbe = m.laeuft ? 'var(--ring)' : 'rgba(255,255,255,.30)';
+    // Ohne Sollwert — nicht erreichbar, oder ein Gerät das keinen nennt —
+    // bleibt der ganze Ring grau. Ein einzelner heller Strich am Anfang
+    // sähe nach Fehler aus.
+    const ohne = m.dead || (m.zwei ? m.low == null : m.soll == null);
+    const von = m.zwei ? m.low : m.min;
+    const bis = m.zwei ? m.high : m.soll;
+
+    let striche = '';
+    // Halbe Grad als kurzer Strich, ganze als langer. Bei sehr weiten
+    // Bereichen würden die halben zu einem Brei — dann nur ganze.
+    const fein = (m.max - m.min) <= 32;
+    const schritt = fein ? 0.5 : 1;
+    for (let v = m.min; v <= m.max + 0.001; v += schritt) {
+      const deg = CL.deg(m, v);
+      const ganz = Math.abs(v - Math.round(v)) < 0.01;
+      const [x1, y1] = clPolar(deg, ganz ? 38 : 40);
+      const [x2, y2] = clPolar(deg, 43);
+      const hell = !ohne && v >= von - 0.001 && v <= bis + 0.001;
+      striche += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}"
+        x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"
+        stroke="${hell ? farbe : 'rgba(255,255,255,.16)'}"
+        stroke-width="${ganz ? 1.5 : 1}" stroke-linecap="round"/>`;
+    }
+
+    // Die Ist-Temperatur als weisser Punkt auf dem Bogen
+    let punkt = '';
+    if (!m.dead && m.ist != null && !isNaN(m.ist)) {
+      const [ix, iy] = clPolar(CL.deg(m, m.ist), 46);
+      punkt = `<circle cx="${ix.toFixed(2)}" cy="${iy.toFixed(2)}" r="6"
+                 fill="${farbe}" opacity=".28"/>
+               <circle cx="${ix.toFixed(2)}" cy="${iy.toFixed(2)}" r="3.2" fill="#fff"/>`;
+    }
+
+    const [ax, ay] = clPolar(CL_START, 46);
+    const [bx, by] = clPolar(CL_START + CL_SPAN, 46);
+    return `<svg viewBox="0 0 100 100">
+      <path d="M ${ax.toFixed(2)} ${ay.toFixed(2)} A 46 46 0 1 1 ${bx.toFixed(2)} ${by.toFixed(2)}"
+        fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5" stroke-linecap="round"/>
+      ${striche}${punkt}
+    </svg>`;
+  },
+
+  zahl(v) { return nfmt(v, v % 1 ? 1 : 0); },
+
+  grad(v, step) {
+    const ganz = Math.trunc(v);
+    if (step >= 1) return `${esc(nfmt(ganz, 0))}<sup>°</sup>`;
+    const rest = Math.abs(v - ganz);
+    return `${esc(nfmt(ganz, 0))}<sup>${esc(nfmt(rest, 1).replace(/^0/, ''))}°</sup>`;
+  },
+
+  sollText(m) {
+    if (m.zwei) {
+      return `<div class="soll zwei${m.modus === 'off' ? ' aus' : ''}">${
+        esc(CL.zahl(m.low))}<sup>°</sup> – ${esc(CL.zahl(m.high))}<sup>°</sup></div>`;
+    }
+    if (m.soll == null) {
+      return `<div class="soll aus">–</div>`;
+    }
+    return `<div class="soll${m.modus === 'off' ? ' aus' : ''}">${
+      CL.grad(m.soll, m.step)}</div>`;
+  },
+
+  /** Die Zeile unter der Zahl: was das Gerät tut, und wie warm es wirklich ist */
+  actText(m) {
+    const bits = [];
+    if (m.dead) return esc(t('unavailable'));
+    const tun = m.aktion ? t('cl.a.' + m.aktion, null, m.aktion)
+      : m.modus === 'off' ? t('off') : t('cl.m.' + m.modus, null, m.modus);
+    bits.push(`<b>${esc(tun)}</b>`);
+    if (m.ist != null && !isNaN(m.ist)) {
+      // Auf einer halben Spalte fällt der Teil weg: die Ist-Temperatur steht
+      // dort schon oben rechts, zweimal wäre sie nur Gedränge.
+      bits.push(`<span class="nowv">${esc(t('cl.now', { v: nfmt(m.ist, 1) }))}</span>`);
+    }
+    return bits.join('<span class="nowv"> · </span>');
+  },
+
+  /** Der Ring samt Zahl und den beiden Knöpfen */
+  dial(m) {
+    const aus = m.modus === 'off' || m.dead;
+    return `
+      <div class="dial" id="dial">
+        ${CL.ring(m)}
+        <div class="cen">
+          ${CL.sollText(m)}
+          <div class="act">${CL.actText(m)}</div>
+          ${m.preset && m.preset !== 'none'
+            ? `<div class="pre">${esc(t('cl.p.' + String(m.preset).toLowerCase(), null, m.preset))}</div>`
+            : ''}
+        </div>
+        <div class="pm minus" id="minus"${aus ? ' disabled' : ''}>
+          <ha-icon icon="mdi:minus"></ha-icon></div>
+        <div class="pm plus" id="plus"${aus ? ' disabled' : ''}>
+          <ha-icon icon="mdi:plus"></ha-icon></div>
+      </div>`;
+  },
+
+  modes(m) {
+    if (!m.modi.length) return '';
+    return `<div class="modes">${m.modi.map((k) => `
+      <div class="mode${k === m.modus ? ' on' : ''}" data-mode="${esc(k)}">
+        <ha-icon icon="${CL_MODES[k].icon}"></ha-icon><span>${esc(t('cl.m.' + k, null, k))}</span>
+      </div>`).join('')}</div>`;
+  },
+
+  presets(m) {
+    if (!m.presets.length) return '';
+    return `<div class="pills">${m.presets.map((p) => `
+      <span class="pill${p === m.preset ? ' on' : ''}" data-preset="${esc(p)}">
+        <ha-icon icon="${CL_PRESETS[String(p).toLowerCase()] || 'mdi:circle-outline'}"></ha-icon
+        ><span>${esc(t('cl.p.' + String(p).toLowerCase(), null, p))}</span>
+      </span>`).join('')}</div>`;
+  },
+
+  fans(m) {
+    if (!m.fans.length) return '';
+    return `<div class="pills">${m.fans.map((f) => `
+      <span class="pill${f === m.fan ? ' on' : ''}" data-fan="${esc(f)}">
+        <ha-icon icon="${CL_FAN[String(f).toLowerCase()] || 'mdi:fan'}"></ha-icon
+        ><span>${esc(t('cl.f.' + String(f).toLowerCase(), null, f))}</span>
+      </span>`).join('')}</div>`;
+  },
+
+  /** Anteil auf dem Bogen → Temperatur, auf die Schrittweite gerundet */
+  wert(m, frac) {
+    const roh = m.min + frac * (m.max - m.min);
+    const v = Math.round(roh / m.step) * m.step;
+    // Fliesskommareste wie 21.900000000000002 abschneiden
+    return clamp(Math.round(v * 100) / 100, m.min, m.max);
+  },
+
+  setSoll(host, m, v) {
+    host.call('climate', 'set_temperature', { entity_id: m.id, temperature: v });
+  },
+
+  setBereich(host, m, low, high) {
+    host.call('climate', 'set_temperature', {
+      entity_id: m.id,
+      target_temp_low: Math.round(low * 100) / 100,
+      target_temp_high: Math.round(high * 100) / 100
+    });
+  },
+
+  schritt(host, m, vz) {
+    if (m.zwei) {
+      CL.setBereich(host, m,
+        clamp(m.low + vz * m.step, m.min, m.high),
+        clamp(m.high + vz * m.step, m.low, m.max));
+      return;
+    }
+    if (m.soll == null) return;
+    CL.setSoll(host, m, clamp(Math.round((m.soll + vz * m.step) * 100) / 100, m.min, m.max));
+  },
+
+  /**
+   * Ring und Knöpfe verdrahten. `onTap` sagt, was ein Tipp mitten auf den
+   * Ring tun soll — in beiden Karten das Detailfenster.
+   */
+  bindDial(host, m, root, onTap) {
+    if (m.dead) return;
+    const dial = root.getElementById('dial');
+    const soll = root.querySelector('.soll');
+    // Beim Ziehen wird nur die Zahl mitgeführt; gesendet wird erst beim
+    // Loslassen. Sonst prasseln zwanzig Dienstaufrufe pro Wischer los.
+    const zeigen = (v) => { if (soll) soll.innerHTML = CL.grad(v, m.step); };
+    if (dial && !m.zwei) {
+      host._press(dial, {
+        axis: 'xy',
+        onTap,
+        onDrag: (p) => zeigen(CL.wert(m, clFraction(p.x, p.y))),
+        onDrop: (p) => CL.setSoll(host, m, CL.wert(m, clFraction(p.x, p.y)))
+      });
+    } else if (dial) {
+      // Bei zwei Sollwerten wandert der nähere der beiden Griffe mit
+      host._press(dial, {
+        axis: 'xy',
+        onTap,
+        onDrop: (p) => {
+          const v = CL.wert(m, clFraction(p.x, p.y));
+          const nahLow = Math.abs(v - m.low) <= Math.abs(v - m.high);
+          CL.setBereich(host, m, nahLow ? v : m.low, nahLow ? m.high : v);
+        }
+      });
+    }
+
+    for (const [id, vz] of [['minus', -1], ['plus', 1]]) {
+      const el = root.getElementById(id);
+      if (!el || el.hasAttribute('disabled')) continue;
+      host._press(el, { onTap: () => CL.schritt(host, m, vz) });
+    }
+  },
+
+  /** Betriebsarten, Voreinstellungen und Lüfterstufen verdrahten */
+  bindButtons(host, m, root) {
+    root.querySelectorAll('[data-mode]').forEach((el) => {
+      host._press(el, { onTap: () => host.call('climate', 'set_hvac_mode',
+        { entity_id: m.id, hvac_mode: el.dataset.mode }) });
+    });
+    root.querySelectorAll('[data-preset]').forEach((el) => {
+      host._press(el, { onTap: () => host.call('climate', 'set_preset_mode',
+        { entity_id: m.id, preset_mode: el.dataset.preset }) });
+    });
+    root.querySelectorAll('[data-fan]').forEach((el) => {
+      host._press(el, { onTap: () => host.call('climate', 'set_fan_mode',
+        { entity_id: m.id, fan_mode: el.dataset.fan }) });
+    });
+  }
+};
+
 class OnyxClimateCard extends OnyxBase {
   static get CSS() {
     return PAL_CSS + `
@@ -8620,7 +9172,9 @@ class OnyxClimateCard extends OnyxBase {
     .soll.aus{ color:#8ea3b5; }
     .act{ font-size:12.5px; color:#7b8fa0; margin-top:9px; }
     ha-card.warm .act{ color:var(--sub); }
-    .act b{ color:var(--acc); font-weight:600; }
+    /* Was das Gerät tut, steht in der Farbe des Betriebs — beim Heizen
+       orange, beim Kühlen blau. Ohne Betrieb ist --ink die Kartenfarbe. */
+    .act b{ color:var(--ink); font-weight:600; }
     .pre{ font-size:11px; color:#6f8497; margin-top:3px; text-transform:uppercase;
           letter-spacing:.08em; }
     ha-card.warm .pre{ color:var(--lab); }
@@ -8645,8 +9199,12 @@ class OnyxClimateCard extends OnyxBase {
            transition:transform .12s ease, background .18s ease; }
     .mode span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
                 max-width:100%; }
-    .mode.on{ background:color-mix(in srgb, var(--btn) 55%, transparent);
-              border-color:color-mix(in srgb, var(--btn) 72%, transparent); color:#fff; }
+    /* Der aktive Modusknopf zieht mit dem Ring mit: ein blauer Knopf unter
+       einem orangen Ring wäre zwei Aussagen über dieselbe Sache. Die
+       Voreinstellungen darunter bleiben in der Kartenfarbe — sie sagen
+       nichts über Heizen oder Kühlen. */
+    .mode.on{ background:color-mix(in srgb, var(--ring) 55%, transparent);
+              border-color:color-mix(in srgb, var(--ring) 72%, transparent); color:#fff; }
     .mode.held{ transform:scale(.95); }
 
     .pills{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -8694,187 +9252,22 @@ class OnyxClimateCard extends OnyxBase {
 
   /* ---------------- Modell ---------------- */
 
+  /* Modell, Ring und Bedienung liegen im gemeinsamen Unterbau `CL`; die
+     Klima-Gruppe der Raum-Karte liest denselben. Die Methodennamen bleiben
+     stehen, weil die Prüfungen sie greifen. */
   _model() {
-    const hass = this._hass, cfg = this._config;
-    const st = hass.states[cfg.entity];
-    if (!st) throw new Error(t('err.entity', { id: cfg.entity }));
-    const a = st.attributes;
-    const dead = isDead(st);
-
-    const step = Number(a.target_temp_step) || 0.5;
-    const min = a.min_temp == null ? 7 : Number(a.min_temp);
-    const max = a.max_temp == null ? 35 : Number(a.max_temp);
-
-    // Ein Gerät im Auto-Betrieb nennt zwei Sollwerte statt einem
-    const low = a.target_temp_low == null ? null : Number(a.target_temp_low);
-    const high = a.target_temp_high == null ? null : Number(a.target_temp_high);
-    const zwei = low != null && high != null;
-    const soll = a.temperature == null ? null : Number(a.temperature);
-
-    const ist = cfg.temperature && hass.states[cfg.temperature]
-      ? Number(hass.states[cfg.temperature].state)
-      : (a.current_temperature == null ? null : Number(a.current_temperature));
-    const feucht = cfg.humidity && hass.states[cfg.humidity]
-      ? Number(hass.states[cfg.humidity].state)
-      : (a.current_humidity == null ? null : Number(a.current_humidity));
-
-    const modus = st.state;
-    const aktion = a.hvac_action || null;
-    // Was tut das Gerät gerade? `hvac_action` weiss es genau; fehlt sie,
-    // schliessen wir vom Betriebsmodus auf das Wahrscheinliche.
-    const laeuft = aktion
-      ? ['heating', 'cooling', 'drying', 'fan'].includes(aktion)
-      : modus !== 'off';
-
-    const modi = (a.hvac_modes || []).filter((m) => CL_MODES[m]);
-    const presets = cfg.show_presets === false ? []
-      : (a.preset_modes || []).filter(Boolean);
-    const fans = cfg.show_fan === false ? [] : (a.fan_modes || []).filter(Boolean);
-
-    return {
-      id: cfg.entity,
-      name: cfg.name || nameOf(hass, cfg.entity),
-      label: cfg.label || t('cl'),
-      icon: cfg.icon || (aktion === 'cooling' ? 'mdi:snowflake' : 'mdi:radiator'),
-      color: cfg.color || this._autoColor(aktion, modus),
-      dead, min, max, step, zwei, soll, low, high, ist, feucht,
-      modus, aktion, laeuft,
-      modi: cfg.show_modes === false ? [] : modi,
-      preset: a.preset_mode || null, presets,
-      fan: a.fan_mode || null, fans
-    };
-  }
-
-  /**
-   * Ohne eigene Farbe färbt sich die Karte nach dem, was gerade passiert:
-   * warm beim Heizen, kalt beim Kühlen, sonst neutral blau.
-   */
-  _autoColor(aktion, modus) {
-    if (aktion === 'heating' || (!aktion && modus === 'heat')) return 'orange';
-    if (aktion === 'cooling' || (!aktion && modus === 'cool')) return 'blau';
-    if (aktion === 'drying' || (!aktion && modus === 'dry')) return 'gruen';
-    return 'blau';
-  }
-
-  /* ---------------- Ring ---------------- */
-
-  /** Temperatur → Winkel auf dem Bogen */
-  _deg(m, v) {
-    return CL_START + CL_SPAN * clamp((v - m.min) / (m.max - m.min), 0, 1);
-  }
-
-  _ring(m) {
-    const farbe = m.laeuft ? 'var(--btn)' : 'rgba(255,255,255,.30)';
-    // Ohne Sollwert — nicht erreichbar, oder ein Gerät das keinen nennt —
-    // bleibt der ganze Ring grau. Ein einzelner heller Strich am Anfang
-    // sähe nach Fehler aus.
-    const ohne = m.dead || (m.zwei ? m.low == null : m.soll == null);
-    const von = m.zwei ? m.low : m.min;
-    const bis = m.zwei ? m.high : m.soll;
-
-    let striche = '';
-    // Halbe Grad als kurzer Strich, ganze als langer. Bei sehr weiten
-    // Bereichen würden die halben zu einem Brei — dann nur ganze.
-    const fein = (m.max - m.min) <= 32;
-    const schritt = fein ? 0.5 : 1;
-    for (let v = m.min; v <= m.max + 0.001; v += schritt) {
-      const deg = this._deg(m, v);
-      const ganz = Math.abs(v - Math.round(v)) < 0.01;
-      const [x1, y1] = clPolar(deg, ganz ? 38 : 40);
-      const [x2, y2] = clPolar(deg, 43);
-      const hell = !ohne && v >= von - 0.001 && v <= bis + 0.001;
-      striche += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}"
-        x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"
-        stroke="${hell ? farbe : 'rgba(255,255,255,.16)'}"
-        stroke-width="${ganz ? 1.5 : 1}" stroke-linecap="round"/>`;
-    }
-
-    // Die Ist-Temperatur als weisser Punkt auf dem Bogen
-    let punkt = '';
-    if (!m.dead && m.ist != null && !isNaN(m.ist)) {
-      const [ix, iy] = clPolar(this._deg(m, m.ist), 46);
-      punkt = `<circle cx="${ix.toFixed(2)}" cy="${iy.toFixed(2)}" r="6"
-                 fill="${farbe}" opacity=".28"/>
-               <circle cx="${ix.toFixed(2)}" cy="${iy.toFixed(2)}" r="3.2" fill="#fff"/>`;
-    }
-
-    const [ax, ay] = clPolar(CL_START, 46);
-    const [bx, by] = clPolar(CL_START + CL_SPAN, 46);
-    return `<svg viewBox="0 0 100 100">
-      <path d="M ${ax.toFixed(2)} ${ay.toFixed(2)} A 46 46 0 1 1 ${bx.toFixed(2)} ${by.toFixed(2)}"
-        fill="none" stroke="rgba(255,255,255,.07)" stroke-width="5" stroke-linecap="round"/>
-      ${striche}${punkt}
-    </svg>`;
-  }
-
-  /* ---------------- Darstellung ---------------- */
-
-  _zahl(v) {
-    return nfmt(v, v % 1 ? 1 : 0);
-  }
-
-  _sollText(m) {
-    if (m.zwei) {
-      return `<div class="soll zwei${m.modus === 'off' ? ' aus' : ''}">${
-        esc(this._zahl(m.low))}<sup>°</sup> – ${esc(this._zahl(m.high))}<sup>°</sup></div>`;
-    }
-    if (m.soll == null) {
-      return `<div class="soll aus">–</div>`;
-    }
-    return `<div class="soll${m.modus === 'off' ? ' aus' : ''}">${
-      this._grad(m.soll, m.step)}</div>`;
-  }
-
-  /**
-   * Die grosse Zahl. Geht das Gerät in halben Grad, steht die Nachkommastelle
-   * immer da — sonst wechselte die Zahl beim Verstellen ständig ihre Breite
-   * und die ganze Karte zappelte.
-   */
-  _grad(v, step) {
-    const ganz = Math.trunc(v);
-    if (step >= 1) return `${esc(nfmt(ganz, 0))}<sup>°</sup>`;
-    const rest = Math.abs(v - ganz);
-    return `${esc(nfmt(ganz, 0))}<sup>${esc(nfmt(rest, 1).replace(/^0/, ''))}°</sup>`;
-  }
-
-  /** Die Zeile unter der Zahl: was das Gerät tut, und wie warm es wirklich ist */
-  _actText(m) {
-    const bits = [];
-    if (m.dead) return esc(t('unavailable'));
-    const tun = m.aktion ? t('cl.a.' + m.aktion, null, m.aktion)
-      : m.modus === 'off' ? t('off') : t('cl.m.' + m.modus, null, m.modus);
-    bits.push(`<b>${esc(tun)}</b>`);
-    if (m.ist != null && !isNaN(m.ist)) {
-      // Auf einer halben Spalte fällt der Teil weg: die Ist-Temperatur steht
-      // dort schon oben rechts, zweimal wäre sie nur Gedränge.
-      bits.push(`<span class="nowv">${esc(t('cl.now', { v: nfmt(m.ist, 1) }))}</span>`);
-    }
-    return bits.join('<span class="nowv"> · </span>');
+    return CL.model(this._hass, this._config, this._config.entity);
   }
 
   _html(m) {
     const { cls, style } = paletteAttrs(m.color, this._config);
-    const aus = m.modus === 'off' || m.dead;
-
-    const modes = m.modi.length ? `<div class="modes">${m.modi.map((k) => `
-      <div class="mode${k === m.modus ? ' on' : ''}" data-mode="${esc(k)}">
-        <ha-icon icon="${CL_MODES[k].icon}"></ha-icon><span>${esc(t('cl.m.' + k, null, k))}</span>
-      </div>`).join('')}</div>` : '';
-
-    const presets = m.presets.length ? `<div class="pills">${m.presets.map((p) => `
-      <span class="pill${p === m.preset ? ' on' : ''}" data-preset="${esc(p)}">
-        <ha-icon icon="${CL_PRESETS[String(p).toLowerCase()] || 'mdi:circle-outline'}"></ha-icon
-        ><span>${esc(t('cl.p.' + String(p).toLowerCase(), null, p))}</span>
-      </span>`).join('')}</div>` : '';
-
-    const fans = m.fans.length ? `<div class="pills">${m.fans.map((f) => `
-      <span class="pill${f === m.fan ? ' on' : ''}" data-fan="${esc(f)}">
-        <ha-icon icon="${CL_FAN[String(f).toLowerCase()] || 'mdi:fan'}"></ha-icon
-        ><span>${esc(t('cl.f.' + String(f).toLowerCase(), null, f))}</span>
-      </span>`).join('')}</div>` : '';
+    // Die Farbe des Betriebs sitzt auf der Karte, damit Ring, Wort und
+    // Modusknopf sie gemeinsam lesen. Läuft nichts, bleibt sie ungesetzt
+    // und `--ring` fällt auf `--btn` zurück — also auf die Kartenfarbe.
+    const stil = mergeStyle(style, CL.farbStil(m));
 
     return `
-    <ha-card class="${m.laeuft ? 'warm' : ''}${cls}${m.dead ? ' dead' : ''}"${style}>
+    <ha-card class="${m.laeuft ? 'warm' : ''}${cls}${m.dead ? ' dead' : ''}"${stil}>
       <div class="head">
         <div class="hleft" id="head">
           <div class="hico"><ha-icon icon="${esc(m.icon)}"></ha-icon></div>
@@ -8890,23 +9283,8 @@ class OnyxClimateCard extends OnyxBase {
             ? `<div class="h">${esc(nfmt(m.feucht, 0))} %</div>` : ''}
         </div>
       </div>
-
-      <div class="dial" id="dial">
-        ${this._ring(m)}
-        <div class="cen">
-          ${this._sollText(m)}
-          <div class="act">${this._actText(m)}</div>
-          ${m.preset && m.preset !== 'none'
-            ? `<div class="pre">${esc(t('cl.p.' + String(m.preset).toLowerCase(), null, m.preset))}</div>`
-            : ''}
-        </div>
-        <div class="pm minus" id="minus"${aus ? ' disabled' : ''}>
-          <ha-icon icon="mdi:minus"></ha-icon></div>
-        <div class="pm plus" id="plus"${aus ? ' disabled' : ''}>
-          <ha-icon icon="mdi:plus"></ha-icon></div>
-      </div>
-
-      ${modes}${presets}${fans}
+${CL.dial(m)}
+      ${CL.modes(m)}${CL.presets(m)}${CL.fans(m)}
     </ha-card>`;
   }
 
@@ -8914,87 +9292,15 @@ class OnyxClimateCard extends OnyxBase {
 
   _bind(m) {
     const root = this.shadowRoot;
-
     const head = root.getElementById('head');
     if (head) this._press(head, { onTap: () => fireMoreInfo(this, m.id) });
-
-    if (!m.dead) {
-      const dial = root.getElementById('dial');
-      const soll = root.querySelector('.soll');
-      // Beim Ziehen wird nur die Zahl mitgeführt; gesendet wird erst beim
-      // Loslassen. Sonst prasseln zwanzig Dienstaufrufe pro Wischer los.
-      const zeigen = (v) => { if (soll) soll.innerHTML = this._grad(v, m.step); };
-      if (dial && !m.zwei) {
-        this._press(dial, {
-          axis: 'xy',
-          onTap: () => fireMoreInfo(this, m.id),
-          onDrag: (p) => zeigen(this._wert(m, clFraction(p.x, p.y))),
-          onDrop: (p) => this._setSoll(m, this._wert(m, clFraction(p.x, p.y)))
-        });
-      } else if (dial) {
-        // Bei zwei Sollwerten wandert der nähere der beiden Griffe mit
-        this._press(dial, {
-          axis: 'xy',
-          onTap: () => fireMoreInfo(this, m.id),
-          onDrop: (p) => {
-            const v = this._wert(m, clFraction(p.x, p.y));
-            const nahLow = Math.abs(v - m.low) <= Math.abs(v - m.high);
-            this._setBereich(m, nahLow ? v : m.low, nahLow ? m.high : v);
-          }
-        });
-      }
-
-      for (const [id, vz] of [['minus', -1], ['plus', 1]]) {
-        const el = root.getElementById(id);
-        if (!el || el.hasAttribute('disabled')) continue;
-        this._press(el, { onTap: () => this._schritt(m, vz) });
-      }
-    }
-
-    root.querySelectorAll('[data-mode]').forEach((el) => {
-      this._press(el, { onTap: () => this.call('climate', 'set_hvac_mode',
-        { entity_id: m.id, hvac_mode: el.dataset.mode }) });
-    });
-    root.querySelectorAll('[data-preset]').forEach((el) => {
-      this._press(el, { onTap: () => this.call('climate', 'set_preset_mode',
-        { entity_id: m.id, preset_mode: el.dataset.preset }) });
-    });
-    root.querySelectorAll('[data-fan]').forEach((el) => {
-      this._press(el, { onTap: () => this.call('climate', 'set_fan_mode',
-        { entity_id: m.id, fan_mode: el.dataset.fan }) });
-    });
+    CL.bindDial(this, m, root, () => fireMoreInfo(this, m.id));
+    CL.bindButtons(this, m, root);
   }
 
-  /** Anteil auf dem Bogen → Temperatur, auf die Schrittweite gerundet */
-  _wert(m, frac) {
-    const roh = m.min + frac * (m.max - m.min);
-    const v = Math.round(roh / m.step) * m.step;
-    // Fliesskommareste wie 21.900000000000002 abschneiden
-    return clamp(Math.round(v * 100) / 100, m.min, m.max);
-  }
+  _wert(m, frac) { return CL.wert(m, frac); }
 
-  _schritt(m, vz) {
-    if (m.zwei) {
-      this._setBereich(m,
-        clamp(m.low + vz * m.step, m.min, m.high),
-        clamp(m.high + vz * m.step, m.low, m.max));
-      return;
-    }
-    if (m.soll == null) return;
-    this._setSoll(m, clamp(Math.round((m.soll + vz * m.step) * 100) / 100, m.min, m.max));
-  }
-
-  _setSoll(m, v) {
-    this.call('climate', 'set_temperature', { entity_id: m.id, temperature: v });
-  }
-
-  _setBereich(m, low, high) {
-    this.call('climate', 'set_temperature', {
-      entity_id: m.id,
-      target_temp_low: Math.round(low * 100) / 100,
-      target_temp_high: Math.round(high * 100) / 100
-    });
-  }
+  _schritt(m, vz) { CL.schritt(this, m, vz); }
 
   getCardSize() {
     const cfg = this._config || {};

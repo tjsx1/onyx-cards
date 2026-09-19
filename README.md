@@ -26,7 +26,7 @@ Keine Abhängigkeiten — weder button-card noch card-mod nötig. Alle Karten la
 | `onyx-camera-card` | Kamera mit Livebild, Bewegung, Licht und Türöffner |
 | `onyx-lock-card` | Schloss: schieben zum Entriegeln, mit Tür- und Akkustand |
 | `onyx-status-card` | Mehrere Zustände in einer Karte, aus Bausteinen und Vorlagen |
-| `onyx-climate-card` | Thermostat mit Ring, Betriebsarten und Voreinstellungen |
+| `onyx-climate-card` | Thermostat mit Ring, Betriebsarten und Voreinstellungen — der Ring steckt auch in der Raum-Karte |
 | `onyx-energy-card` | Energiefluss zwischen Netz, PV, Batterie, Haus und Wallbox |
 
 ## Installation über HACS
@@ -165,7 +165,7 @@ lights:
 | `icon` | Bereichs-Icon | z. B. `mdi:sofa` |
 | `temperature` | erster Sensor des Bereichs | Anzeige oben rechts |
 | `humidity` | erster Sensor des Bereichs | dito für die Luftfeuchte |
-| `groups` | `[light, cover, media_player, climate, devices]` | Reihenfolge der Gruppenknöpfe |
+| `groups` | `[light, cover, water, media_player, climate, devices]` | Reihenfolge der Gruppenknöpfe |
 | `color` | `blau` | Kartenfarbe: `blau` `gruen` `gelb` `orange` `rot` `violett` `rosa` — oder ein eigener Hexwert wie `"#00b3a4"` |
 | `label` | `Raum` | Die kleine Zeile über dem Namen |
 | `navigation_path` | — | Wohin ein Tipp auf die Kopfzeile springt |
@@ -314,6 +314,45 @@ Unter den Zeilen steht ein einziger Knopf: **Alle Ventile zu**. „Alle auf" gib
 nicht — das ist die Geste, die man nie will und im falschen Moment teuer bezahlt.
 Weil die Liste gemischt sein darf, geht der Befehl geteilt hinaus: `valve.close_valve`
 an die Ventile, `homeassistant.turn_off` an die Schalter.
+
+**Klima.** Die Klima-Gruppe zeigt beim Aufklappen keine Zeilen, sondern gleich den
+**Ring** des Thermostats — Ist, Soll, Betriebsart. Eine Zeile könnte dort nichts, was
+der Ring nicht besser kann.
+
+![Die Klima-Gruppe: ein Thermostat und zwei](https://raw.githubusercontent.com/tjsx1/onyx-cards/main/docs/room-climate.png)
+
+Das ist derselbe Ring wie in der [Klima-Karte](#onyx-climate-card), samt Ziehen, den
+beiden Schrittknöpfen, Betriebsarten, Voreinstellungen und Lüfterstufen. Rechts in der
+Kopfzeile steht bei **einem** Thermostat, was es gerade tut; bei mehreren wird gezählt
+wie in den anderen Gruppen.
+
+Ab dem **zweiten** Thermostat erscheint darüber ein Umschalter — dieselbe Idee wie der
+Streifen unter dem Kamerabild. Der Punkt links im Feld sagt, ob dieses Gerät gerade
+arbeitet; der Ring gehört immer dem gewählten. Bei einem einzigen fehlt der Umschalter,
+er wäre ein Knopf ohne Wahl.
+
+**Die Farbe des Betriebs.** Ring, Ist-Punkt, das Wort unter der Zahl, die Zahl in der
+Kopfzeile und der **aktive Modusknopf** nehmen an, was das Gerät gerade tut:
+
+| Es tut | Farbe |
+|---|---|
+| heizt (`heating`, `preheating`) | orange |
+| kühlt (`cooling`, `defrosting`) | blau |
+| entfeuchtet (`drying`) | gelb |
+| lüftet (`fan`) | neutral grau |
+| steht bereit (`idle`) oder ist aus | grau wie bisher |
+
+Gefärbt wird nach **`hvac_action`**, nicht nach dem eingestellten Modus. Der Modus sagt,
+was gewünscht ist; die Aktion sagt, was passiert. Ein Thermostat auf `auto` stünde sonst
+orange da, während es kühlt — und eines auf Heizen, das seine Solltemperatur längst
+erreicht hat, stünde orange da, obwohl es gerade gar nichts tut.
+
+Der **Grund der Karte** färbt sich nicht mit. Er gehört dem Raum, an dem auch Licht und
+Storen hängen. Und die Voreinstellungen bleiben in der Kartenfarbe: *Komfort* sagt nichts
+über Heizen oder Kühlen.
+
+`action_color: false` schaltet die Einfärbung ab — in der Raum-Karte wie in der
+Klima-Karte.
 
 **Der Sammelplatz.** Licht, Storen, Musik und Klima decken den Alltag ab — aber ein
 Raum hat mehr: Saugroboter, Küchenmaschine, Luftreiniger, 3D-Drucker. Dafür gibt es
@@ -1409,12 +1448,13 @@ show_fan: false
 | `name` | Gerätename | Überschrift der Karte |
 | `label` | `Klima` | Die kleine Zeile darüber |
 | `icon` | automatisch | Heizkörper, beim Kühlen eine Schneeflocke |
-| `color` | nach Zustand | Palette der Karte; ohne Angabe orange beim Heizen, blau beim Kühlen, grün beim Trocknen |
+| `color` | nach Zustand | Palette der Karte; ohne Angabe orange beim Heizen, blau beim Kühlen, gelb beim Entfeuchten |
 | `temperature` | aus dem Thermostat | Eigener Sensor für die Anzeige oben rechts |
 | `humidity` | aus dem Thermostat | dito für die Luftfeuchte |
 | `show_modes` | `true` | Die Reihe Heizen, Kühlen, Auto, Aus |
 | `show_presets` | `true` | Voreinstellungen als Pillen (Komfort, Nacht, …) |
 | `show_fan` | `true` | Lüfterstufen, falls das Gerät welche kennt |
+| `action_color` | `true` | Ring, Wort und aktiver Modusknopf in der Farbe des Betriebs. Sichtbar wird das nur bei festgenagelter `color:` — sonst trägt die ganze Karte diese Farbe ja schon |
 
 **Bedienung.** Am Ring ziehen verstellt den Sollwert; die beiden Knöpfe gehen einen
 Schritt in der Auflösung des Geräts — meist ein halbes Grad. Ein Tipp in die Mitte
@@ -1651,6 +1691,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.16.0** — Raum-Karte: die Klima-Gruppe zeigt beim Aufklappen gleich den **Ring** des Thermostats statt einer Zeile — Ist, Soll, Betriebsarten, Voreinstellungen, alles wie in der Klima-Karte. Ab dem zweiten Thermostat schaltet ein Streifen darüber um. Dazu färben sich Ring, Wort und aktiver Modusknopf nach `hvac_action`: orange beim Heizen, blau beim Kühlen, gelb beim Entfeuchten, grau sobald das Gerät nur bereitsteht (`action_color: false` schaltet es ab). Der Kartengrund bleibt beim Raum. Unter der Haube liegen Ring und Bedienung jetzt **einmal** im Code und werden von beiden Karten gelesen; dass dabei nichts verrutscht ist, steht pixelgenau fest. Zwei Nebenwirkungen: Entfeuchten färbt die Klima-Karte gelb statt grün, und `preheating` sowie `defrosting` zählen jetzt als Betrieb
 
 **1.15.0** — Raum-Karte: neue Gruppe **Wasser** für smarte Ventile — Rasensprenger, Tropfschlauch, Absperrhahn. Die Zeile öffnet und schliesst, rechts stehen die Liter von heute; aufgeklappt kommen der Ventilknopf, Laufzeiten über ein eigenes Skript, bis zu vier Zeitpläne mit ihrer nächsten Zeit und der Verbrauch als Kacheln. In der Liste dürfen `valve.` und `switch.` stehen; ohne Liste sammelt die Gruppe die Ventile des Bereichs. Unter den Zeilen steht «Alle Ventile zu» — «alle auf» gibt es bewusst nicht
 
