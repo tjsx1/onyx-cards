@@ -1458,7 +1458,14 @@ show_fan: false
 
 **Bedienung.** Am Ring ziehen verstellt den Sollwert; die beiden Knöpfe gehen einen
 Schritt in der Auflösung des Geräts — meist ein halbes Grad. Ein Tipp in die Mitte
-öffnet das Detailfenster. Die Reihen darunter zeigen nur, was das Gerät wirklich
+öffnet das Detailfenster.
+
+Gezogen wird nur **auf dem Kranz**: der Kasten des Rings ist breiter als der Kreis
+darin, und wer in den Ecken oder quer durch die Zahl wischt, meint nicht den Ring.
+Senkrechtes Wischen bleibt dem Dashboard — es scrollt, statt die Temperatur zu
+verstellen. Und in der **Lücke unten**, wo keine Skala ist, passiert nichts: dort auf
+das nähere Ende zu runden hiess, dass jeder Wisch nach unten die Mindesttemperatur
+einstellte. Die Reihen darunter zeigen nur, was das Gerät wirklich
 meldet: ein Heizkörperventil ohne Kühlung bekommt keinen Kühlen-Knopf, ein Thermostat
 ohne Lüfter keine Lüfterstufen.
 
@@ -1691,6 +1698,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.16.1** — Ring der Klima-Bedienung: ein Wisch in den Ecken des Rings, quer durch die Zahl oder nach unten verstellte den Sollwert — nach unten sogar auf die **Mindesttemperatur**, weil die Lücke unten auf das nähere Ende gerundet wurde. Jetzt zieht nur, wer den Kranz trifft; in der Lücke passiert nichts; und senkrechtes Wischen scrollt wieder das Dashboard statt die Heizung zu verstellen (`touch-action: pan-y`). Betraf die Klima-Karte seit ihrem Anfang und wurde mit 1.16.0 in die Raum-Karte getragen, wo man daran vorbeiscrollt
 
 **1.16.0** — Raum-Karte: die Klima-Gruppe zeigt beim Aufklappen gleich den **Ring** des Thermostats statt einer Zeile — Ist, Soll, Betriebsarten, Voreinstellungen, alles wie in der Klima-Karte. Ab dem zweiten Thermostat schaltet ein Streifen darüber um. Dazu färben sich Ring, Wort und aktiver Modusknopf nach `hvac_action`: orange beim Heizen, blau beim Kühlen, gelb beim Entfeuchten, grau sobald das Gerät nur bereitsteht (`action_color: false` schaltet es ab). Der Kartengrund bleibt beim Raum. Unter der Haube liegen Ring und Bedienung jetzt **einmal** im Code und werden von beiden Karten gelesen; dass dabei nichts verrutscht ist, steht pixelgenau fest. Zwei Nebenwirkungen: Entfeuchten färbt die Klima-Karte gelb statt grün, und `preheating` sowie `defrosting` zählen jetzt als Betrieb
 

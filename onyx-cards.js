@@ -25,7 +25,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.16.0';
+const ONYX_VERSION = '1.16.1';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -1566,6 +1566,12 @@ class OnyxBase extends HTMLElement {
     // "down" ist der wichtigste Zustand hier: Ohne ihn hält eine blosse
     // Mausbewegung über der Karte schon für ein Ziehen her.
     let timer = null, held = false, dragging = false, down = false, sx = 0, sy = 0;
+    // Manche Elemente sind grösser als das, was man an ihnen ziehen kann —
+    // der Ring liegt in einem breiteren Kasten. `dragFrom` sagt, ob der
+    // Griff dort angesetzt hat, wo Ziehen gemeint ist. Tippen bleibt
+    // überall erlaubt: ein Tipp mitten in den Ring soll weiter das
+    // Detailfenster öffnen.
+    let ziehbar = true;
 
     const pctFrom = (ev) => {
       const r = el.getBoundingClientRect();
@@ -1581,6 +1587,7 @@ class OnyxBase extends HTMLElement {
       if (ev.button != null && ev.button > 0) return;   // Rechts- und Mittelklick ignorieren
       down = true; held = false; dragging = false;
       sx = ev.clientX; sy = ev.clientY;
+      ziehbar = opts.dragFrom ? !!opts.dragFrom(ev) : true;
       // Ein Zeiger, den der Browser schon losgelassen hat, lässt sich nicht
       // mehr einfangen — das darf den Rest des Griffs nicht abwürgen.
       try { el.setPointerCapture && el.setPointerCapture(ev.pointerId); } catch (e) { /* egal */ }
@@ -1593,7 +1600,7 @@ class OnyxBase extends HTMLElement {
     el.addEventListener('pointermove', (ev) => {
       if (!down) return;                                 // blosses Hovern ist kein Ziehen
       const dx = Math.abs(ev.clientX - sx), dy = Math.abs(ev.clientY - sy);
-      if (!dragging && opts.onDrag && Math.max(dx, dy) > 8) {
+      if (!dragging && ziehbar && opts.onDrag && Math.max(dx, dy) > 8) {
         dragging = true; this._busy = true; clearTimeout(timer);
       }
       if (dragging) { ev.preventDefault(); opts.onDrag(pctFrom(ev)); }
@@ -2090,8 +2097,11 @@ class OnyxRoomCard extends OnyxBase {
     .klima{ display:flex; flex-direction:column; gap:9px; }
     .grp.akt b{ color:var(--ink); }
 
+    /* pan-y statt none: senkrecht wischen soll das Dashboard scrollen,
+       nicht die Heizung verstellen. Gedreht wird waagrecht, und das bleibt
+       dem Ring. */
     .klima .dial{ position:relative; width:100%; aspect-ratio:1/.78; display:grid;
-           place-items:center; margin:-2px 0 -4px; touch-action:none;
+           place-items:center; margin:-2px 0 -4px; touch-action:pan-y;
            cursor:pointer; }
     .klima .dial svg{ position:absolute; inset:0; width:100%; height:100%; }
     .klima .cen{ position:relative; text-align:center; line-height:1;
@@ -8760,19 +8770,54 @@ function clPolar(deg, r, cx, cy) {
 }
 
 /**
- * Wo im Ring hat der Finger aufgesetzt? Kommt der Punkt in der Lücke unten
- * an, wird auf das nähere Ende gerundet — sonst springt der Sollwert beim
- * Danebengreifen quer über die Skala.
+ * Wo im Ring hat der Finger aufgesetzt?
+ *
+ * Kommt der Punkt in der Lücke unten an, gibt es **keinen** Wert. Früher
+ * wurde dort auf das nähere Ende gerundet — und weil die Lücke unten
+ * liegt, machte jeder Wisch nach unten aus der Heizung eine
+ * Mindesttemperatur. Lieber nichts tun als das Falsche.
  */
 function clFraction(x, y) {
   const dx = x - 50, dy = y - 50;          // y wird von unten gezählt
   let deg = (Math.atan2(dx, dy) * 180) / Math.PI;
   if (deg < 0) deg += 360;
   const ENDE = (CL_START + CL_SPAN) % 360; // 135
-  if (deg > ENDE && deg < CL_START) return deg < 180 ? 1 : 0;
+  if (deg > ENDE && deg < CL_START) return null;
   if (deg < CL_START) deg += 360;
   return clamp((deg - CL_START) / CL_SPAN, 0, 1);
 }
+
+/**
+ * Wo genau liegt der Finger auf dem Ring?
+ *
+ * Der Kasten des Rings ist breiter als der Kreis darin: das SVG steht mit
+ * `meet` als Quadrat mittig, und links und rechts bleibt Rand. Wer dort
+ * wischt, meint nicht den Ring. Und wer quer durch die Zahl fährt, erst
+ * recht nicht.
+ *
+ * Zurück kommt der Abstand vom Mittelpunkt — 1 ist der Bogen selbst — und
+ * ob der Punkt in der Lücke unten liegt, wo gar keine Skala ist.
+ */
+function clTreffer(el, ev) {
+  const r = el.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  const seite = Math.min(r.width, r.height);
+  const dx = ev.clientX - (r.left + r.width / 2);
+  const dy = ev.clientY - (r.top + r.height / 2);
+  // Der Bogen liegt bei Radius 46 von 50 des Quadrats
+  const rad = Math.hypot(dx, dy) / (seite / 2) / (46 / 50);
+  // 0 ist oben, gezählt wird im Uhrzeigersinn — wie bei clPolar
+  let deg = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  if (deg < 0) deg += 360;
+  const ENDE = (CL_START + CL_SPAN) % 360;   // 135
+  return { rad, deg, luecke: deg > ENDE && deg < CL_START };
+}
+
+/**
+ * Der Kranz, in dem ein Zug als Drehen zählt. Innen endet er vor der Zahl,
+ * aussen etwas hinter dem Bogen — wer ihn trifft, will ihn auch drehen.
+ */
+const CL_GRIFF = { innen: 0.55, aussen: 1.25 };
 
 /** Die Betriebsarten, die wir zeigen können — in dieser Reihenfolge */
 const CL_MODES = {
@@ -9079,20 +9124,36 @@ const CL = {
     // Beim Ziehen wird nur die Zahl mitgeführt; gesendet wird erst beim
     // Loslassen. Sonst prasseln zwanzig Dienstaufrufe pro Wischer los.
     const zeigen = (v) => { if (soll) soll.innerHTML = CL.grad(v, m.step); };
+    // Gezogen wird nur, wo der Ring auch liegt: nicht in den Ecken des
+    // Kastens, nicht quer durch die Zahl, nicht in der Lücke unten.
+    const dragFrom = (ev) => {
+      const tr = clTreffer(dial, ev);
+      return !!tr && !tr.luecke
+        && tr.rad >= CL_GRIFF.innen && tr.rad <= CL_GRIFF.aussen;
+    };
     if (dial && !m.zwei) {
       host._press(dial, {
         axis: 'xy',
-        onTap,
-        onDrag: (p) => zeigen(CL.wert(m, clFraction(p.x, p.y))),
-        onDrop: (p) => CL.setSoll(host, m, CL.wert(m, clFraction(p.x, p.y)))
+        onTap, dragFrom,
+        onDrag: (p) => {
+          const f = clFraction(p.x, p.y);
+          // Durch die Lücke hindurch: die Zahl bleibt stehen, wo sie war
+          if (f != null) zeigen(CL.wert(m, f));
+        },
+        onDrop: (p) => {
+          const f = clFraction(p.x, p.y);
+          if (f != null) CL.setSoll(host, m, CL.wert(m, f));
+        }
       });
     } else if (dial) {
       // Bei zwei Sollwerten wandert der nähere der beiden Griffe mit
       host._press(dial, {
         axis: 'xy',
-        onTap,
+        onTap, dragFrom,
         onDrop: (p) => {
-          const v = CL.wert(m, clFraction(p.x, p.y));
+          const f = clFraction(p.x, p.y);
+          if (f == null) return;
+          const v = CL.wert(m, f);
           const nahLow = Math.abs(v - m.low) <= Math.abs(v - m.high);
           CL.setBereich(host, m, nahLow ? v : m.low, nahLow ? m.high : v);
         }
@@ -9158,7 +9219,7 @@ class OnyxClimateCard extends OnyxBase {
 
     /* Der Ring. Die Striche sind die Skala; jeder ganze Grad ist länger. */
     .dial{ position:relative; width:100%; aspect-ratio:1/.86; display:grid;
-           place-items:center; touch-action:none; cursor:pointer; }
+           place-items:center; touch-action:pan-y; cursor:pointer; }
     .dial svg{ position:absolute; inset:0; width:100%; height:100%; }
     .cen{ position:relative; text-align:center; line-height:1;
           padding:6px 46px 30px; box-sizing:border-box; max-width:100%;
