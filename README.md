@@ -410,6 +410,12 @@ oder Kühlung arbeitet. Storen zählen dafür nicht mit, weder offen noch zu; so
 leuchtete nachts jede Karte im Haus. Ihr Gruppenknopf leuchtet aber sehr wohl, sobald
 eine Store geschlossen ist.
 
+**Die Messwerte oben rechts sind antippbar.** Ein Tipp auf die Temperatur öffnet ihr
+Detailfenster, ein Tipp auf die Feuchte ihres — dort zeichnet Home Assistant den
+Verlauf mit Achsen und Zeitraumwahl. Antippbar ist nur, was auch einen Sensor hinter
+sich hat; steht dort nichts, passiert nichts. Für einen Verlauf **in** der Karte gibt
+es `history:` weiter unten.
+
 **Bedienung.** Tipp auf einen Gruppenknopf **klappt die Gruppe auf** und zeigt jedes
 Gerät einzeln. **Halten schaltet die ganze Gruppe** um. In der Liste: Tipp = an/aus,
 quer ziehen = Helligkeit oder Storenhöhe, Halten = Detailfenster.
@@ -1698,6 +1704,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.16.2** — Raum-Karte: die Messwerte oben rechts lassen sich antippen und öffnen das Detailfenster ihres Sensors, wo Home Assistant den Verlauf mit Achsen und Zeitraumwahl zeichnet. Temperatur und Feuchte je eigenes Fenster; ohne Sensor keine Trefferfläche
 
 **1.16.1** — Ring der Klima-Bedienung: ein Wisch in den Ecken des Rings, quer durch die Zahl oder nach unten verstellte den Sollwert — nach unten sogar auf die **Mindesttemperatur**, weil die Lücke unten auf das nähere Ende gerundet wurde. Jetzt zieht nur, wer den Kranz trifft; in der Lücke passiert nichts; und senkrechtes Wischen scrollt wieder das Dashboard statt die Heizung zu verstellen (`touch-action: pan-y`). Betraf die Klima-Karte seit ihrem Anfang und wurde mit 1.16.0 in die Raum-Karte getragen, wo man daran vorbeiscrollt
 

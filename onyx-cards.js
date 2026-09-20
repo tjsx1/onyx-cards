@@ -25,7 +25,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.16.1';
+const ONYX_VERSION = '1.16.2';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -1982,6 +1982,11 @@ class OnyxRoomCard extends OnyxBase {
     .env{ text-align:right; line-height:1.35; font-variant-numeric:tabular-nums; }
     .env .t{ font-size:16px; font-weight:700; letter-spacing:-.02em; color:#9fb0be; }
     .env .h{ font-size:12px; color:#72879a; }
+    /* Antippbar ist nur, was auch einen Sensor hinter sich hat. Der Zeiger
+       ist der ganze Hinweis: eine Unterstreichung an einer Zahl sähe nach
+       Verweis aus, und zwei Ziffern tragen kein Knopfkleid. */
+    .env .tapp{ cursor:pointer; }
+    .env .tapp.held{ opacity:.6; }
     ha-card.warm .env .t{ color:var(--acc); }
     ha-card.warm .env .h{ color:var(--sub); }
 
@@ -2438,6 +2443,12 @@ class OnyxRoomCard extends OnyxBase {
       color: cfg.color || null,
       icon: cfg.icon || (area && area.icon) || 'mdi:home-outline',
       temp: readOut(tempId),
+      // Die Kennungen, nicht nur der Text: ein Tipp auf den Messwert soll
+      // dessen Detailfenster öffnen, und dort zeichnet Home Assistant den
+      // Verlauf mit Achsen und Zeitraumwahl — besser als alles, was in
+      // eine Kartenzeile passt.
+      tempId: tempId || null,
+      humId: humId || null,
       hum: readOut(humId),
       groups,
       open: this._open,
@@ -2824,7 +2835,8 @@ class OnyxRoomCard extends OnyxBase {
     // Höhe des Bands: ohne diese Liste stünde die Blase über dem Raumnamen,
     // sobald die Maus auf dem Lichtknopf liegt, und sperrte dabei den
     // Neuaufbau der Karte.
-    const knoepfe = '.hleft, .gbtn, .rbtn, .lrow, .fav, .dial, .pm, .mode, .pill, .pk';
+    const knoepfe = '.hleft, .gbtn, .rbtn, .lrow, .fav, .dial, .pm, .mode, .pill, .pk,'
+      + ' .env [data-env]';
 
     karte.addEventListener('pointerdown', (ev) => {
       if (ev.button != null && ev.button > 0) return;
@@ -3308,8 +3320,10 @@ class OnyxRoomCard extends OnyxBase {
           </div>
         </div>
         <div class="env">
-          ${m.temp ? `<div class="t">${esc(m.temp)}</div>` : ''}
-          ${m.hum ? `<div class="h">${esc(m.hum)}</div>` : ''}
+          ${m.temp ? `<div class="t${m.tempId ? ' tapp' : ''}"${
+            m.tempId ? ` data-env="${esc(m.tempId)}"` : ''}>${esc(m.temp)}</div>` : ''}
+          ${m.hum ? `<div class="h${m.humId ? ' tapp' : ''}"${
+            m.humId ? ` data-env="${esc(m.humId)}"` : ''}>${esc(m.hum)}</div>` : ''}
         </div>
       </div>
       <div class="sub">${esc(this._summary(m))}</div>
@@ -3410,6 +3424,15 @@ class OnyxRoomCard extends OnyxBase {
           this._repaint();
         }
       });
+    });
+
+    // Die Messwerte oben rechts: jeder öffnet sein eigenes Detailfenster.
+    // Halten tut dasselbe — bei einer Zahl gibt es keine zweite Bedeutung,
+    // und ein Griff, der zu lange dauert, soll nicht ins Leere gehen.
+    root.querySelectorAll('.env [data-env]').forEach((el) => {
+      const id = el.dataset.env;
+      const go = () => fireMoreInfo(this, id);
+      this._press(el, { onTap: go, onHold: go });
     });
 
     this._bindPanel(m);
