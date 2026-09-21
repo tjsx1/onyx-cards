@@ -157,7 +157,6 @@ lights:
 | `covers` | aus dem Bereich | Storen. Auch `storen:` oder `rollos:` geschrieben |
 | `cover_auto` | — | Schalter der Storen-Automatik; wird zum Knopf, wenn die Storen aufgeklappt sind |
 | `cover_wind` | — | dito für den Windwächter |
-| `cover_favorite` | — | Wunschposition aller Storen als Rückfallwert: `70`, `{position: 70, tilt: 35}` oder `stop`. Nur YAML — im Editor stellst du jede Store einzeln ein |
 | `media` | aus dem Bereich | Medienspieler |
 | `climate` | aus dem Bereich | Thermostate |
 | `devices` | — | Der Sammelplatz: jede Entität darf rein. Auch `geraete:` geschrieben. Füllt sich **nicht** von selbst aus dem Bereich |
@@ -210,50 +209,24 @@ cover_wind: input_boolean.windwaechter
 Die beiden Schalter dürfen ein `input_boolean`, ein `switch` oder eine `automation`
 sein — geschaltet wird über `homeassistant.toggle`, das kennt sie alle.
 
-**Die Wunschposition.** Viele Storen kennen eine gespeicherte Lieblingsstellung —
-bei Somfy heisst sie *my*. Home Assistant kennt so etwas nicht: die Cover-Schnittstelle
-hat nur auf, zu, halt, eine Höhe und einen Lamellenwinkel. Die Karte bietet deshalb
-beide Wege an, und jede Store wählt ihren eigenen.
+**Die Storen-Zeile.** Jede Store steht als eigene Zeile da und bringt ihre
+Bedienung gleich mit — aufgeklappt wird nichts mehr. Links das Symbol, daneben der
+Name und darunter, wie sie steht: die Höhe als Prozentzahl und, wenn die Store ihre
+Lamellen kennt, der Winkel in Grad. Rechts die drei Fahrknöpfe **auf**, **Halt**,
+**zu**, dieselben wie in der Storen-Karte. Fährt die Store gerade, leuchtet der
+Halt-Knopf und die beiden anderen treten zurück.
 
-Im visuellen Editor steht unter der Karte der Abschnitt **Wunschpositionen der Storen**:
-eine Zeile je Store, aufklappbar, mit einem Regler für die Höhe, einem für den
-Lamellenwinkel — der erscheint nur, wenn die Store ihre Lamellen kennt — und einem
-Knopf **Ist-Zustand übernehmen**, der beides so einträgt, wie die Store gerade steht.
-Das ist meist der bequemste Weg: fahr sie hin, wo du sie haben willst, und drück
-einmal darauf.
+Die Zeile selbst behält ihre Griffe: **Tippen** fährt auf oder zu, **Ziehen** setzt
+die Höhe, **Halten** öffnet das Detailfenster von Home Assistant. Ein Griff auf einen
+der drei Knöpfe bleibt beim Knopf und bewegt die Zeile nicht.
 
-In der YAML sieht dasselbe so aus:
+**Der Lamellenwinkel** ist antippbar — die gepunktete Linie darunter ist der Hinweis.
+Ein Tipp fährt die Lamellen ganz auf oder ganz zu, je nachdem, wo sie stehen; Halten
+öffnet das Detailfenster. Eine Zwischenstellung — 36° statt 0° oder 90° — stellst du
+in der **Storen-Karte** ein, die den vollen Schieber hat, oder im Detailfenster. In
+der Zeile hätte ein zweiter Ziehweg neben der Höhe nur zu Fehlgriffen geführt.
 
-```yaml
-type: custom:onyx-room-card
-area: wohnzimmer
-storen:
-  - entity: cover.wohnen_sued
-    favorite: {position: 70, tilt: 35}   # Höhe und Lamellenwinkel
-  - entity: cover.wohnen_west
-    favorite: 70                          # nur die Höhe
-  - entity: cover.wohnen_nord
-    favorite: stop                        # Somfy RTS: nur ein Halt
-  - cover.bad                             # kein Stern
-```
-
-Der Stern steht am rechten Rand der Zeile und lässt den Rest der Zeile in Ruhe —
-Ziehen und Antippen funktionieren weiter wie zuvor. Er erscheint nur, wo eine
-Wunschposition eingerichtet ist; trägt eine Store im Raum eine, halten die anderen
-den Platz frei, damit die Prozentzahlen fluchten. Steht die Store schon auf ihrer
-Wunschposition — Höhe **und** Winkel —, leuchtet er in der Kartenfarbe. Bei `stop`
-bleibt er dunkel: die Karte weiss nicht, welche Position der Antrieb sich gemerkt hat.
-
-Beim Antippen schickt die Karte `cover.set_cover_position` und, wenn ein Winkel
-eingetragen ist, `cover.set_cover_tilt_position` hinterher — dasselbe, was eine Szene
-in Home Assistant auch tut. Bei `stop` geht nur `cover.stop_cover` hinaus, und wohin
-die Store dann fährt, weiss allein der Antrieb.
-
-Kommen die Storen aus dem Bereich statt aus einer Liste, kann die Karte sie einzeln
-nicht ansprechen. Der Editor bietet dann einen Knopf an, der die Storen des Bereichs
-als Liste übernimmt; danach lässt sich jede einzeln einstellen. Wer lieber alles auf
-einmal setzt, schreibt `cover_favorite:` in die YAML — das gilt für jede Store, die
-nichts Eigenes sagt, und `favorite: false` an einem Eintrag nimmt sie wieder aus.
+Auf einer halben Spalte fällt das Wort *Lamellen* weg und der Winkel bleibt stehen.
 
 **Wasser.** Smarte Wasserventile bekommen eine eigene Gruppe — der Rasensprenger
 im Garten, der Tropfschlauch im Hochbeet, der Absperrhahn hinter der Waschmaschine.
@@ -430,19 +403,20 @@ darunter erscheint, was die Zeile selbst nicht kann:
 
 - **Licht** — Schiene für die Farbtemperatur, Farbrad, Effekte. Also alles, was auch
   die Licht-Karte kann, bis auf den Helligkeitsbalken: den ersetzt die Zeile.
-- **Store** — der Lamellenwinkel. Die Höhe stellt die Zeile.
 - **Musik** — Lautstärke, dazu zurück, anhalten und weiter.
 
+Storen klappen nicht auf: sie tragen ihre drei Fahrknöpfe und den Lamellenwinkel in
+der Zeile selbst.
+
 Gezeigt wird nur, was das Gerät wirklich beherrscht: eine Lampe ohne Farbe bekommt
-keinen Winkel, eine Store ohne Lamellen auch nicht, und ein Schalter in der
-Lampenliste erst recht nicht. In der Gruppe **Geräte** gibt es das Aufklappen gar
+keinen Winkel, und ein Schalter in der Lampenliste erst recht nicht. In der Gruppe **Geräte** gibt es das Aufklappen gar
 nicht — dort steht alles Mögliche nebeneinander, und ein Winkel wäre bei jeder
 zweiten Zeile ein anderes Versprechen.
 
 Offen ist immer höchstens **eine** Zeile: klappst du die nächste auf, schliesst sich
 die vorige. Sonst wäre die Karte bei vier Farblampen länger als der Bildschirm. Die
 drei Griffe der Zeile bleiben, wie sie waren — der Winkel hält seine Ereignisse bei
-sich, genau wie der Stern bei den Storen.
+sich, genau wie die Fahrknöpfe in der Storen-Zeile.
 
 **Farbe.** Jede Karte darf ihre eigene bekommen; sinnvoll, wenn du Räume auf einen
 Blick auseinanderhalten willst:
@@ -1704,6 +1678,10 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.17.0** — Raum-Karte: die **Storen-Zeile** bringt ihre Bedienung mit, statt sich ein zweites Mal aufzuklappen. Rechts in der Zeile stehen die drei Fahrknöpfe **auf · Halt · zu** wie in der Storen-Karte, unter dem Namen die Höhe und der Lamellenwinkel in Grad; der Winkel ist antippbar und fährt die Lamellen ganz auf oder ganz zu. Tippen, Ziehen und Halten der Zeile bleiben, wie sie waren. Auf einer halben Spalte fällt das Wort *Lamellen* weg.
+
+  **Entfernt:** die Wunschposition der Storen (der Stern) aus 1.4.0/1.5.0 — in der Zeile war neben den drei Knöpfen kein Platz mehr für sie, ohne Namen abzuschneiden. Damit fallen auch `cover_favorite:`, `favorite:` am Eintrag und der Editor-Abschnitt *Wunschpositionen der Storen* weg. Bestehende YAML bleibt gültig, die Schlüssel tun aber nichts mehr; eine Lieblingsstellung fährst du weiter über eine Szene oder ein Skript an. Ebenfalls weg: die Lamellen-Schiene im aufgeklappten Blatt — den feinen Winkel stellst du in der **Storen-Karte** oder im Detailfenster ein
 
 **1.16.2** — Raum-Karte: die Messwerte oben rechts lassen sich antippen und öffnen das Detailfenster ihres Sensors, wo Home Assistant den Verlauf mit Achsen und Zeitraumwahl zeichnet. Temperatur und Feuchte je eigenes Fenster; ohne Sensor keine Trefferfläche
 

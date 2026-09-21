@@ -25,7 +25,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.16.2';
+const ONYX_VERSION = '1.17.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -402,9 +402,6 @@ const STRINGS = {
     heating: 'heizt',
     cooling: 'kühlt',
     coverShut: '{n} Store geschlossen',
-    favTilt: 'Winkel {n} %',
-    favTo: 'Auf {n} % fahren',
-    favStop: 'Auf die Wunschposition (my)',
     coversShut: '{n} Storen geschlossen',
     mediaPaused: 'Pausiert',
     allOff: 'Alles aus',
@@ -434,6 +431,8 @@ const STRINGS = {
     windLock: 'Windwächter aktiv',
     slats: 'Lamellen',
     slatsAngle: 'Lamellen {n}°',
+    // Auf der halben Spalte bleibt in der Storen-Zeile nur der Winkel
+    slatsDeg: '{n}°',
     opening: 'fährt auf',
     closing: 'fährt zu',
 
@@ -519,29 +518,6 @@ const STRINGS = {
       + 'dem Bereich; was drin steht, bestimmst du.',
     'ed.lock_entity': 'Sperre',
     'ed.cover_auto': 'Storen-Automatik',
-    'ed.favs': 'Wunschpositionen der Storen',
-    'ed.h.favs': 'Wohin der Stern in der Karte fährt. Eine Store ohne Angabe '
-      + 'bekommt keinen Stern.',
-    'ed.h.favsArea': 'Die Storen kommen aus dem Bereich. Damit jede ihre eigene '
-      + 'Wunschposition bekommen kann, muss sie als Liste in der Karte stehen.',
-    'ed.listCovers': 'Storen als Liste übernehmen',
-    'ed.favNone': 'keine Wunschposition',
-    'ed.clearFav': 'Wunschposition löschen',
-    'ed.takeNow': 'Ist-Zustand übernehmen',
-    'ed.h.takeNow': 'Übernimmt Höhe und Winkel, wie die Store gerade steht — {s}.',
-    'ed.position': 'Höhe',
-    'ed.h.position': '0 ist ganz zu, 100 ganz offen',
-    'ed.tilt': 'Lamellenwinkel',
-    'ed.h.tilt': 'Nur bei Storen, die ihre Lamellen kennen',
-    'ed.stop': 'Nur ein Halt schicken',
-    'ed.h.stopOnly': 'Für Antriebe ohne Positionsangabe, etwa Somfy RTS: die Karte '
-      + 'schickt nur ein Halt, den Rest macht der Antrieb — die my-Taste.',
-    'ed.cover_favorite': 'Wunschposition der Storen',
-    'ed.h.cover_favorite': 'Eine Prozentzahl (z. B. 70) oder das Wort stop. '
-      + 'Bei einer Zahl fährt der Stern die Store dorthin; bei stop schickt er '
-      + 'nur ein Halt — das ist bei Somfy RTS die my-Taste. Leer lassen: dann '
-      + 'erscheint kein Stern. Einzelne Storen können in der YAML mit '
-      + '"favorite:" davon abweichen.',
     'ed.cover_wind': 'Windwächter',
     'ed.h.cover_auto': 'Erscheint als Knopf, wenn die Storen ausgeklappt sind',
     'ed.h.cover_wind': 'Ebenso — leer lassen, wenn es keinen gibt',
@@ -971,9 +947,6 @@ const STRINGS = {
     heating: 'heating',
     cooling: 'cooling',
     coverShut: '{n} blind closed',
-    favTilt: 'Tilt {n}%',
-    favTo: 'Move to {n}%',
-    favStop: 'Move to the favourite position (my)',
     coversShut: '{n} blinds closed',
     mediaPaused: 'Paused',
     allOff: 'All off',
@@ -1003,6 +976,7 @@ const STRINGS = {
     windLock: 'Wind guard active',
     slats: 'Slats',
     slatsAngle: 'Slats {n}°',
+    slatsDeg: '{n}°',
     opening: 'opening',
     closing: 'closing',
 
@@ -1088,28 +1062,6 @@ const STRINGS = {
       + 'up to you.',
     'ed.lock_entity': 'Lock',
     'ed.cover_auto': 'Blind automation',
-    'ed.favs': 'Favourite positions of the blinds',
-    'ed.h.favs': 'Where the star in the card drives to. A blind without a setting '
-      + 'gets no star.',
-    'ed.h.favsArea': 'The blinds come from the area. For each one to have its own '
-      + 'favourite position it has to be listed in the card.',
-    'ed.listCovers': 'Take the blinds as a list',
-    'ed.favNone': 'no favourite position',
-    'ed.clearFav': 'Remove favourite position',
-    'ed.takeNow': 'Take the current position',
-    'ed.h.takeNow': 'Takes height and tilt as the blind stands right now — {s}.',
-    'ed.position': 'Height',
-    'ed.h.position': '0 is fully closed, 100 fully open',
-    'ed.tilt': 'Slat angle',
-    'ed.h.tilt': 'Only for blinds that know their slats',
-    'ed.stop': 'Only send a halt',
-    'ed.h.stopOnly': 'For drives without a position, such as Somfy RTS: the card '
-      + 'only sends a halt, the drive does the rest — the my button.',
-    'ed.cover_favorite': 'Favourite position of the blinds',
-    'ed.h.cover_favorite': 'A percentage (e.g. 70) or the word stop. '
-      + 'With a number the star drives the blind there; with stop it only sends '
-      + 'a halt — on Somfy RTS that is the my button. Leave empty and no star '
-      + 'appears. Individual blinds can override this in YAML with "favorite:".',
     'ed.cover_wind': 'Wind guard',
     'ed.h.cover_auto': 'Appears as a button while the blinds are expanded',
     'ed.h.cover_wind': 'Same — leave empty if you do not have one',
@@ -1862,52 +1814,15 @@ function normList(list) {
 }
 
 /**
- * Die Wunschposition einer Store. Home Assistant kennt so etwas nicht —
- * die Cover-Schnittstelle hat nur auf, zu, halt, eine Höhe und einen
- * Lamellenwinkel. Erlaubt sind deshalb drei Schreibweisen:
- *   `favorite: {position: 70, tilt: 35}`   Höhe und Winkel
- *   `favorite: 70`                          nur die Höhe
- *   `favorite: stop`                        nur ein Halt — bei Somfy RTS die my-Taste
- * Steht am Eintrag nichts, gilt `cover_favorite` der ganzen Karte.
- * Heraus kommt immer `null`, `'stop'` oder `{position, tilt}`.
+ * Die kurze Auskunft einer Store: „offen", „zu" oder die Prozentzahl.
+ * In der Storen-Zeile steht sie vor dem Lamellenwinkel — dort wäre
+ * „60 % offen · Lamellen 45°" eine Zeile, die nirgends ganz hinpasst.
+ * Die Schwellen sind dieselben wie in der Storen-Karte.
  */
-function coverFav(entry, cfg) {
-  let raw = entry && entry.favorite;
-  if (raw == null || raw === '') raw = cfg && cfg.cover_favorite;
-  if (raw == null || raw === '' || raw === false) return null;
-  if (typeof raw === 'string' && raw.trim().toLowerCase() === 'stop') return 'stop';
-  const zahl = (v) => {
-    if (v == null || v === '' || v === false) return null;
-    const n = Number(v);
-    return isNaN(n) ? null : clamp(Math.round(n), 0, 100);
-  };
-  if (typeof raw === 'object') {
-    if (raw.stop === true) return 'stop';
-    const pos = zahl(raw.position != null ? raw.position : raw.hoehe);
-    const winkel = zahl(raw.tilt != null ? raw.tilt : raw.winkel);
-    if (pos == null && winkel == null) return null;
-    return { position: pos, tilt: winkel };
-  }
-  const pos = zahl(raw);
-  return pos == null ? null : { position: pos, tilt: null };
-}
-
-/** Steht die Store schon dort, wo der Stern sie hinschicken würde? */
-function favErreicht(it) {
-  const f = it.fav;
-  if (!f || f === 'stop') return false;
-  if (f.position != null && it.pct !== f.position) return false;
-  if (f.tilt != null && it.tilt !== f.tilt) return false;
-  return true;
-}
-
-/** Was der Stern verspricht, in Worten */
-function favTitel(f) {
-  if (f === 'stop') return t('favStop');
-  const teile = [];
-  if (f.position != null) teile.push(t('favTo', { n: f.position }));
-  if (f.tilt != null) teile.push(t('favTilt', { n: f.tilt }));
-  return teile.join(' \u00b7 ');
+function covKurz(pct) {
+  if (pct >= 98) return t('open');
+  if (pct <= 2) return t('closed');
+  return `${pct} %`;
 }
 
 class OnyxRoomCard extends OnyxBase {
@@ -2034,17 +1949,35 @@ class OnyxRoomCard extends OnyxBase {
             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .lval{ font-size:12.5px; color:var(--sub); font-variant-numeric:tabular-nums;
            white-space:nowrap; }
-    /* Die Wunschposition: ein eigenes Ziel am rechten Rand der Zeile.
-       Steht die Store schon dort, leuchtet der Stern in der Kartenfarbe. */
-    .fav{ width:28px; height:28px; border-radius:9px; flex:none; display:grid;
-          place-items:center; cursor:pointer; --mdc-icon-size:15px; color:#a8c2d4;
-          background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.10);
-          transition:transform .12s ease, background .18s ease; }
-    .fav.set{ background:color-mix(in srgb, var(--btn) 55%, transparent);
-              border-color:color-mix(in srgb, var(--btn) 72%, transparent); color:#fff; }
-    .fav.held{ transform:scale(.92); }
-    .fav.leer{ background:none; border-color:transparent; pointer-events:none; }
-    .lrow.dead .fav{ pointer-events:none; }
+    /* ---------------------------------------------------------------- *
+       Die Storen-Zeile. Sie ist die einzige, die zwei Textzeilen und
+       Knöpfe trägt: auf, Halt, zu — dieselben drei wie in der
+       Storen-Karte, nur klein. Damit ist die Store im Raum vollständig
+       bedienbar, ohne die Zeile noch einmal aufzuklappen.
+     * ---------------------------------------------------------------- */
+    .lrow.cov{ height:58px; }
+    .zwei{ flex:1; min-width:0; }
+    .zwei .lname{ flex:none; }
+    .zwei .unten{ font-size:11px; line-height:14px; color:var(--sub);
+                  font-variant-numeric:tabular-nums; margin-top:1px;
+                  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* Der Winkel ist der einzige Wert der Zeile, der noch einen eigenen
+       Griff hat. Ein Knopfkleid trägt er nicht — zwei Ziffern sind zu
+       klein dafür; die gepunktete Linie ist der ganze Hinweis. */
+    .unten .tip{ color:#a8c2d4; cursor:pointer;
+                 border-bottom:1px dotted rgba(168,194,212,.45); }
+    .unten .tip.held{ opacity:.6; }
+    .unten .sm{ display:none; }
+    .fbtns{ display:flex; gap:5px; flex:none; }
+    .fbtn{ width:30px; height:30px; border-radius:9px; flex:none; display:grid;
+           place-items:center; cursor:pointer; color:#fff; --mdc-icon-size:13px;
+           background:linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.045));
+           border:1px solid rgba(255,255,255,.11);
+           transition:transform .12s ease, background .18s ease; }
+    .fbtn.akt{ background:color-mix(in srgb, var(--btn) 60%, transparent);
+               border-color:color-mix(in srgb, var(--btn) 78%, transparent); }
+    .fbtn.dim{ opacity:.36; }
+    .fbtn.held{ transform:scale(.9); }
     .lrow.off .lname, .lrow.off .lval{ color:#7b8fa0; }
     .lrow.dead{ opacity:.45; }
     /* Zweite Ebene: eine Zeile lässt sich noch einmal aufklappen. Was
@@ -2260,6 +2193,13 @@ class OnyxRoomCard extends OnyxBase {
       .rbtn{ font-size:12px; gap:5px; padding:0 4px; }
       .rbtn .lg{ display:none; }
       .rbtn .sm{ display:inline; }
+      /* Dieselbe Sparsamkeit in der Storen-Zeile: aus „Lamellen 36°" wird
+         „36°", und die drei Knöpfe geben sechs Pixel her. Sonst hiesse
+         jede Store „Store…". */
+      .lrow.cov .unten .lg{ display:none; }
+      .lrow.cov .unten .sm{ display:inline; }
+      .fbtn{ width:28px; height:28px; }
+      .fbtns{ gap:4px; }
     }
     `;
   }
@@ -2391,10 +2331,9 @@ class OnyxRoomCard extends OnyxBase {
           liter: d === 'water' ? readNum(hass, entry.water) : null,
           // Nur echte Lampen: die Zeile nimmt die Farbe an, in der sie leuchtet
           glow: own === 'light' ? lightGlow(st) : null,
-          // Nur Storen tragen eine Wunschposition — und nur, wenn eine
-          // eingerichtet ist. Ohne Einrichtung bleibt die Zeile, wie sie war.
-          fav: own === 'cover' ? coverFav(entry, cfg) : null,
-          // Der Lamellenwinkel gehört zum Vergleich mit der Wunschposition
+          // Der Lamellenwinkel steht in der zweiten Textzeile der Store.
+          // Dort ist er auch der einzige Griff, der noch auf ihn zeigt:
+          // angetippt fährt er die Lamellen ganz auf oder ganz zu.
           tilt: own === 'cover' && st && st.attributes.current_tilt_position != null
             ? Math.round(st.attributes.current_tilt_position) : null,
           on,
@@ -2585,14 +2524,10 @@ class OnyxRoomCard extends OnyxBase {
       };
     }
 
-    if (own === 'cover') {
-      const f = a.supported_features || 0;
-      const tilt = a.current_tilt_position;
-      // Bit 16 ist "Lamellen lassen sich stellen". Meldet die Store einen
-      // Winkel, glauben wir ihr das auch ohne Bit.
-      if (!((f & 16) !== 0 || tilt != null)) return null;
-      return { art: 'cover', tilt: tilt == null ? 0 : Math.round(tilt) };
-    }
+    // Storen klappen nicht mehr auf. Ihre drei Fahrknöpfe stehen in der
+    // Zeile selbst, und der Lamellenwinkel steht als Text daneben — ein
+    // zweites Ausklappen für eine einzige Schiene war ein Griff zu viel.
+    if (own === 'cover') return null;
 
     if (own === 'media_player') {
       const f = a.supported_features || 0;
@@ -2835,8 +2770,8 @@ class OnyxRoomCard extends OnyxBase {
     // Höhe des Bands: ohne diese Liste stünde die Blase über dem Raumnamen,
     // sobald die Maus auf dem Lichtknopf liegt, und sperrte dabei den
     // Neuaufbau der Karte.
-    const knoepfe = '.hleft, .gbtn, .rbtn, .lrow, .fav, .dial, .pm, .mode, .pill, .pk,'
-      + ' .env [data-env]';
+    const knoepfe = '.hleft, .gbtn, .rbtn, .lrow, .fbtn, .dial, .pm, .mode, .pill, .pk,'
+      + ' .env [data-env], .unten .tip';
 
     karte.addEventListener('pointerdown', (ev) => {
       if (ev.button != null && ev.button > 0) return;
@@ -2909,6 +2844,52 @@ class OnyxRoomCard extends OnyxBase {
       return `${one(it.temp)} → ${one(it.target)} °C`;
     }
     return it.state;
+  }
+
+  /**
+   * Der Text der Storen-Zeile: der Name, darunter die Position und — wenn
+   * die Store einen Winkel kennt — der Winkel als eigener Griff. Angetippt
+   * fährt er die Lamellen ganz auf oder ganz zu, genau wie ein Tipp auf den
+   * Schieber der Storen-Karte. Eine Zwischenstellung stellt man dort oder
+   * im Detailfenster ein; in der Zeile wäre eine dritte Ziehrichtung nur
+   * eine Falle.
+   *
+   * Auf der halben Spalte fällt „Lamellen" weg und der Winkel bleibt —
+   * dieselbe lange und kurze Beschriftung, die schon die Knöpfe unter den
+   * Zeilen tragen.
+   */
+  _storenText(it) {
+    const grad = it.tilt == null ? '' : Math.round(it.tilt * 0.9);
+    return `
+      <div class="zwei">
+        <div class="lname">${esc(it.name)}</div>
+        <div class="unten"><span class="wert">${esc(covKurz(it.pct))}</span>${
+          it.tilt == null ? '' : `
+          <span class="trenn"> · </span><span class="tip" data-tilt="${esc(it.id)}"
+            ><span class="lg">${esc(t('slatsAngle', { n: grad }))}</span
+            ><span class="sm">${esc(t('slatsDeg', { n: grad }))}</span></span>`}</div>
+      </div>`;
+  }
+
+  /**
+   * Auf, Halt, Zu — dieselben drei Knöpfe wie in der Storen-Karte, nur
+   * klein und in der Zeile. Sie stehen bei jeder Store, auch wenn ihre
+   * Merkmale kein Halt melden: die Storen-Karte macht es genauso, und ein
+   * Knopf, der bei einer Store da ist und bei der nächsten fehlt, verwirrt
+   * mehr als ein Halt, den der Antrieb ignoriert.
+   */
+  _storenKnoepfe(it) {
+    const faehrt = it.state === 'opening' || it.state === 'closing';
+    const k = (was, icon, extra) => `
+      <div class="fbtn ${extra || ''}" data-cov="${was}" data-cid="${esc(it.id)}">
+        <ha-icon icon="${icon}"></ha-icon>
+      </div>`;
+    return `
+      <div class="fbtns">
+        ${k('up', 'mdi:triangle', faehrt ? 'dim' : '')}
+        ${k('stop', 'mdi:square', faehrt ? 'akt' : '')}
+        ${k('down', 'mdi:triangle-down', faehrt ? 'dim' : '')}
+      </div>`;
   }
 
   /** Was rechts in der Kopfzeile steht, wenn nur ein Thermostat da ist */
@@ -3047,23 +3028,6 @@ class OnyxRoomCard extends OnyxBase {
       return;
     }
 
-    if (e.art === 'cover') {
-      const tilt = root.getElementById('rtilt');
-      if (!tilt) return;
-      const fill = tilt.querySelector('.tfill');
-      const out = tilt.querySelector('.tcap span');
-      this._press(tilt, {
-        axis: 'x',
-        onDrag: (v) => {
-          if (fill) fill.style.width = v + '%';
-          if (out) out.textContent = t('slats') + ' ' + v + ' %';
-        },
-        onDrop: (v) => this.call('cover', 'set_cover_tilt_position',
-          { entity_id: id, tilt_position: v })
-      });
-      return;
-    }
-
     const vol = root.getElementById('rvol');
     if (vol) {
       const fill = vol.querySelector('.tfill');
@@ -3191,17 +3155,6 @@ class OnyxRoomCard extends OnyxBase {
       </div>`;
     }
 
-    if (e.art === 'cover') {
-      return `
-      <div class="sub2">
-        <div class="tbar" id="rtilt">
-          <div class="tfill" style="width:${e.tilt}%"></div>
-          <div class="tcap"><ha-icon icon="mdi:format-line-weight"></ha-icon>
-            <span>${esc(t('slats'))} ${e.tilt} %</span></div>
-        </div>
-      </div>`;
-    }
-
     return `
       <div class="sub2">
         ${e.canVol ? `
@@ -3242,9 +3195,6 @@ class OnyxRoomCard extends OnyxBase {
     let panel = '';
     const og = m.groups.find((g) => g.domain === m.open);
     if (og) {
-      // Trägt auch nur eine Store einen Stern, halten die anderen den Platz
-      // frei — sonst stünden die Prozentzahlen in der Liste versetzt.
-      const platzFuerStern = og.items.some((i) => i.fav != null);
       const rows = og.items.map((it) => {
         // Ziehen kann man an der Wasserzeile nicht — die Fläche zeigt
         // trotzdem, dass etwas läuft. Meldet das Ventil eine Stellung,
@@ -3252,19 +3202,21 @@ class OnyxRoomCard extends OnyxBase {
         const pct = it.dim && it.pct > 0 ? it.pct
           : og.domain === 'water' && it.on ? (it.pct > 0 ? it.pct : 100)
           : 0;
+        // Die Store ist die einzige Zeile mit einer zweiten Textzeile und
+        // mit Knöpfen darin. Sie wird dafür höher; alle anderen Gruppen
+        // behalten die schmale Zeile mit Wert am rechten Rand.
+        const storen = og.domain === 'cover' && !it.dead;
         return `
-        <div class="lrow ${it.dead ? 'dead' : ''} ${!it.on && !it.dead ? 'off' : ''}"
+        <div class="lrow ${storen ? 'cov' : ''} ${it.dead ? 'dead' : ''} ${
+             !it.on && !it.dead ? 'off' : ''}"
              data-ent="${esc(it.id)}" data-dom="${og.domain}"${
                it.glow ? ` style="--acc:${esc(it.glow)};--btn:${esc(it.glow)}"` : ''}>
           <div class="lfill" style="width:${pct}%"></div>
           <div class="lico ${it.on ? 'grad' : ''}"><ha-icon icon="${esc(it.icon)}"></ha-icon></div>
+          ${storen ? this._storenText(it) : `
           <div class="lname">${esc(it.name)}</div>
-          <div class="lval">${esc(this._rowText(it, og.domain))}</div>
-          ${it.fav == null ? (platzFuerStern ? '<div class="fav leer"></div>' : '') : `<div class="fav${
-            favErreicht(it) ? ' set' : ''}"
-               data-fav="${esc(it.id)}" title="${esc(favTitel(it.fav))}">
-            <ha-icon icon="mdi:star"></ha-icon>
-          </div>`}
+          <div class="lval">${esc(this._rowText(it, og.domain))}</div>`}
+          ${storen ? this._storenKnoepfe(it) : ''}
           ${it.mehr ? `<div class="rcar ${it.offen ? 'auf' : ''}"
                data-car="${esc(it.id)}">
             <ha-icon icon="mdi:chevron-down"></ha-icon>
@@ -3397,16 +3349,35 @@ class OnyxRoomCard extends OnyxBase {
       });
     });
 
-    // Der Stern liegt in der Zeile, die selbst auf Tippen und Ziehen hört.
-    // Damit ein Griff auf den Stern nicht auch die Zeile bewegt, hält er
-    // die Ereignisse bei sich.
-    root.querySelectorAll('.fav[data-fav]').forEach((knopf) => {
-      const og = m.groups.find((g) => g.domain === 'cover');
-      const it = og && og.items.find((x) => x.id === knopf.dataset.fav);
-      if (!it) return;
+    // Die drei Fahrknöpfe liegen in der Zeile, die selbst auf Tippen und
+    // Ziehen hört. Damit ein Griff auf einen Knopf nicht auch die Store
+    // schaltet oder ihre Position verschiebt, halten sie die Ereignisse
+    // bei sich — dieselbe Vorsichtsmassnahme, die vorher der Stern hatte.
+    const DIENST = { up: 'open_cover', stop: 'stop_cover', down: 'close_cover' };
+    root.querySelectorAll('.fbtn[data-cov]').forEach((knopf) => {
+      const dienst = DIENST[knopf.dataset.cov];
+      const id = knopf.dataset.cid;
+      if (!dienst || !id) return;
       ['pointerdown', 'pointerup', 'click'].forEach((art) =>
         knopf.addEventListener(art, (ev) => ev.stopPropagation()));
-      this._press(knopf, { onTap: () => this._favorite(it) });
+      this._press(knopf, { onTap: () => this.call('cover', dienst, { entity_id: id }) });
+    });
+
+    // Der Winkel in der zweiten Textzeile: ein Tipp fährt die Lamellen ganz
+    // auf oder ganz zu. Halten öffnet das Detailfenster — dort steht der
+    // volle Schieber, wenn eine Zwischenstellung gebraucht wird.
+    root.querySelectorAll('.unten .tip[data-tilt]').forEach((el) => {
+      const id = el.dataset.tilt;
+      const og = m.groups.find((g) => g.domain === 'cover');
+      const it = og && og.items.find((x) => x.id === id);
+      if (!it) return;
+      ['pointerdown', 'pointerup', 'click'].forEach((art) =>
+        el.addEventListener(art, (ev) => ev.stopPropagation()));
+      this._press(el, {
+        onTap: () => this.call('cover', 'set_cover_tilt_position',
+          { entity_id: id, tilt_position: it.tilt > 50 ? 0 : 100 }),
+        onHold: () => fireMoreInfo(this, id)
+      });
     });
 
     // Der Winkel klappt die Zeile auf. Wie der Stern hält er seine
@@ -3456,7 +3427,10 @@ class OnyxRoomCard extends OnyxBase {
       const id = row.dataset.ent;
       const domain = row.dataset.dom;
       const fill = row.querySelector('.lfill');
-      const val = row.querySelector('.lval');
+      // Die Store trägt ihren Wert in der zweiten Textzeile, alle anderen
+      // am rechten Rand. Beim Ziehen wird nur dieser Wert neu geschrieben,
+      // nicht die ganze Zeile — der Winkel daneben soll stehen bleiben.
+      const val = row.querySelector('.lval, .unten .wert');
       const og = m.groups.find((g) => g.domain === domain);
       const it = og && og.items.find((x) => x.id === id);
       const canDrag = !!(it && it.dim);
@@ -3467,7 +3441,7 @@ class OnyxRoomCard extends OnyxBase {
         onHold: () => fireMoreInfo(this, id),
         onDrag: canDrag ? (pct) => {
           fill.style.width = pct + '%';
-          val.textContent = domain === 'cover' ? t('pctOpen', { n: pct }) : `${pct} %`;
+          val.textContent = domain === 'cover' ? covKurz(pct) : `${pct} %`;
         } : null,
         onDrop: canDrag ? (pct) => {
           if (domain === 'cover') {
@@ -3534,28 +3508,6 @@ class OnyxRoomCard extends OnyxBase {
     }
     // light, switch, input_boolean — jede Domäne kennt ihr eigenes toggle
     this.call(own, 'toggle', { entity_id: id });
-  }
-
-  /**
-   * Auf die Wunschposition fahren. Bei `stop` ist der Knopf die my-Taste
-   * der Fernbedienung: Home Assistant schickt nur ein Halt, und der Antrieb
-   * selbst weiss, wohin er dann fährt.
-   */
-  _favorite(it) {
-    if (it.fav == null) return;
-    if (it.fav === 'stop') {
-      this.call('cover', 'stop_cover', { entity_id: it.id });
-      return;
-    }
-    // Beides auf einmal, so wie es eine Szene in Home Assistant auch tut.
-    if (it.fav.position != null) {
-      this.call('cover', 'set_cover_position',
-        { entity_id: it.id, position: it.fav.position });
-    }
-    if (it.fav.tilt != null) {
-      this.call('cover', 'set_cover_tilt_position',
-        { entity_id: it.id, tilt_position: it.fav.tilt });
-    }
   }
 
   _toggleGroup(grp) {
@@ -9914,9 +9866,7 @@ const ED_HELP_KEY = {
   history_picker: 'ed.h.history_picker',
   battery_entity: 'ed.h.battery_entity', room_command: 'ed.h.room_command',
   consumables: 'ed.h.consumables',
-  lights: 'ed.h.lights', cover_auto: 'ed.h.cover_auto', cover_wind: 'ed.h.cover_wind',
-  cover_favorite: 'ed.h.cover_favorite',
-  position: 'ed.h.position', tilt: 'ed.h.tilt', stop: 'ed.h.stopOnly'
+  lights: 'ed.h.lights', cover_auto: 'ed.h.cover_auto', cover_wind: 'ed.h.cover_wind'
 };
 
 /** Hilfetexte, die nur in der Energie-Karte gelten */
@@ -10632,213 +10582,19 @@ class OnyxRoomEditor extends OnyxEditor {
     return cfg;
   }
 
-  /* ---------------- Wunschpositionen der Storen ---------------- */
-
-  /** In welchen Schlüssel die Storenliste geschrieben wird */
-  _coverKey() {
-    for (const k of GROUP_KEYS.cover) if (this._config[k]) return k;
-    return 'covers';
-  }
-
-  /** Die Storen, die der Abschnitt zeigt — aus der Liste oder aus dem Bereich */
-  _coverEntries() {
-    const listed = normList(OnyxRoomCard._listFor(this._config, 'cover'));
-    if (listed) return { liste: true, eintraege: listed };
-    if (!this._config.area) return { liste: false, eintraege: [] };
-    return {
-      liste: false,
-      eintraege: entitiesInArea(this._hass, this._config.area, 'cover')
-        .map((entity) => ({ entity }))
-    };
-  }
-
-  /** Eine Wunschposition setzen oder löschen und die Liste zurückschreiben */
-  _setFav(id, fav) {
-    const cfg = Object.assign({}, this._config);
-    const key = this._coverKey();
-    const liste = this._coverEntries().eintraege;
-    const knapp = (e) => (Object.keys(e).length > 1 ? e : e.entity);
-    const neu = liste.map((e) => {
-      if (e.entity !== id) return knapp(Object.assign({}, e));
-      const o = Object.assign({}, e);
-      if (fav == null) delete o.favorite;
-      else o.favorite = fav;
-      return knapp(o);
-    });
-    for (const k of GROUP_KEYS.cover) delete cfg[k];
-    cfg[key] = neu;
-    this._favOpen = id;
-    this._favSig = null;
-    this._emit(cfg);
-  }
-
-  /** Die Storen des Bereichs als feste Liste übernehmen */
-  _materialisieren() {
-    const cfg = Object.assign({}, this._config);
-    cfg[this._coverKey()] = this._coverEntries().eintraege.map((e) => e.entity);
-    this._favSig = null;
-    this._emit(cfg);
-  }
-
-  /** Was der Streifen zeigt, solange die Store zu ist */
-  _favZeile(fav) {
-    if (fav === 'stop') return t('favStop');
-    if (!fav) return t('ed.favNone');
-    return favTitel(fav);
-  }
-
-  _favSchema(id, fav) {
-    const st = this._hass.states[id];
-    const kannWinkel = !!(st && (st.attributes.current_tilt_position != null
-      || ((st.attributes.supported_features || 0) & 16)));
-    const halt = { name: 'stop', selector: { boolean: {} } };
-    if (fav === 'stop') return [halt];
-    const regler = (name) => ({
-      name,
-      selector: { number: { min: 0, max: 100, step: 1, mode: 'slider',
-        unit_of_measurement: '%' } }
-    });
-    // Die Regler stehen oben: das ist der Normalfall. Der Somfy-Schalter
-    // ist der Sonderfall und darf darunter warten.
-    return [kannWinkel ? grid(regler('position'), regler('tilt')) : regler('position'),
-      halt];
-  }
-
+  /**
+   * Unter den Feldern steht ein Hinweis: die Karte holt sich aus dem
+   * Bereich, was sie braucht, und die Listen sind nur für Abweichungen da.
+   */
   _extra(root) {
-    if (!this._favBox) {
+    if (!this._note) {
       this._note = document.createElement('p');
       this._note.className = 'hint';
       this._note.textContent = t('ed.roomHint');
       root.appendChild(this._note);
-      root.appendChild(this._section(t('ed.favs')));
-      this._favHint = document.createElement('p');
-      this._favHint.className = 'hint';
-      root.appendChild(this._favHint);
-      this._favBox = document.createElement('div');
-      this._favBox.className = 'items';
-      root.appendChild(this._favBox);
     }
-
-    const { liste, eintraege } = this._coverEntries();
-    this._favHint.textContent = liste ? t('ed.h.favs') : t('ed.h.favsArea');
-
-    const sig = [liste, this._favOpen, eintraege.map((e) =>
-      e.entity + ':' + JSON.stringify(e.favorite == null ? '' : e.favorite)).join('|')
-    ].join('~');
-    if (sig === this._favSig) {
-      for (const f of this._favForms) this._fillForm(f.form, f.schema, f.data);
-      return;
-    }
-    this._favSig = sig;
-    this._favForms = [];
-    this._favBox.textContent = '';
-
-    if (!liste && eintraege.length) {
-      const adds = document.createElement('div');
-      adds.className = 'adds';
-      adds.appendChild(this._btn('mdi:format-list-bulleted', t('ed.listCovers'),
-        () => this._materialisieren()));
-      this._favBox.appendChild(adds);
-      return;
-    }
-
-    for (const eintrag of eintraege) {
-      const id = eintrag.entity;
-      const fav = coverFav(eintrag, {});          // ohne Kartenvorgabe: nur das Eigene
-      const offen = this._favOpen === id;
-
-      const box = document.createElement('div');
-      box.className = 'item' + (offen ? ' on' : '');
-
-      const strip = document.createElement('div');
-      strip.className = 'strip';
-      strip.innerHTML = `
-        <span class="ic"><ha-icon icon="mdi:window-shutter"></ha-icon></span>
-        <span class="tx"><span class="n"></span><span class="d"></span></span>`;
-      strip.querySelector('.n').textContent = nameOf(this._hass, id);
-      strip.querySelector('.d').textContent = this._favZeile(fav);
-      strip.addEventListener('click', (ev) => {
-        if (ev.target.closest('.tools')) return;
-        this._favOpen = offen ? null : id;
-        this._favSig = null;
-        this._render();
-      });
-
-      const tools = document.createElement('span');
-      tools.className = 'tools';
-      if (fav) {
-        tools.appendChild(this._btn('mdi:close', '', () => this._setFav(id, null),
-          'x', t('ed.clearFav')));
-      }
-      tools.appendChild(this._btn(offen ? 'mdi:chevron-up' : 'mdi:chevron-down', '',
-        () => { this._favOpen = offen ? null : id; this._favSig = null; this._render(); },
-        'x'));
-      strip.appendChild(tools);
-      box.appendChild(strip);
-
-      if (offen) {
-        const body = document.createElement('div');
-        body.className = 'body';
-        const daten = fav === 'stop'
-          ? { stop: true, position: 0, tilt: 0 }
-          : { stop: false,
-              position: (fav && fav.position != null) ? fav.position : 0,
-              tilt: (fav && fav.tilt != null) ? fav.tilt : 0 };
-
-        const form = this._makeForm((d) => {
-          if (d.stop) { this._setFav(id, 'stop'); return; }
-          const neu = { position: clamp(Math.round(Number(d.position) || 0), 0, 100) };
-          if (d.tilt != null && !isNaN(Number(d.tilt))) {
-            neu.tilt = clamp(Math.round(Number(d.tilt)), 0, 100);
-          }
-          this._setFav(id, neu);
-        });
-        this._favForms.push({ form, schema: this._favSchema(id, fav ? (fav === 'stop'
-          ? 'stop' : fav) : null), data: daten });
-        body.appendChild(form);
-
-        const adds = document.createElement('div');
-        adds.className = 'adds';
-        adds.appendChild(this._btn('mdi:crosshairs-gps', t('ed.takeNow'), () => {
-          const st = this._hass.states[id];
-          if (!st) return;
-          const neu = {};
-          const pos = st.attributes.current_position;
-          const winkel = st.attributes.current_tilt_position;
-          neu.position = pos != null ? Math.round(pos) : (isOn(st) ? 100 : 0);
-          if (winkel != null) neu.tilt = Math.round(winkel);
-          this._setFav(id, neu);
-        }));
-        body.appendChild(adds);
-
-        const wie = document.createElement('p');
-        wie.className = 'hint';
-        wie.textContent = t('ed.h.takeNow', { s: this._istText(id) });
-        body.appendChild(wie);
-
-        box.appendChild(body);
-      }
-
-      this._favBox.appendChild(box);
-    }
-
-    for (const f of this._favForms) this._fillForm(f.form, f.schema, f.data);
   }
 
-  /** Wie die Store gerade steht, in Worten */
-  _istText(id) {
-    const st = this._hass.states[id];
-    if (!st) return '';
-    const pos = st.attributes.current_position;
-    const winkel = st.attributes.current_tilt_position;
-    const teile = [];
-    // Hier steht der Ist-Zustand, nicht ein Befehl — also "70 %", nicht
-    // "auf 70 % fahren".
-    teile.push(pos != null ? nfmt(Math.round(pos), 0) + ' %'
-      : (isOn(st) ? t('open') : t('closed')));
-    if (winkel != null) teile.push(t('favTilt', { n: Math.round(winkel) }));
-    return teile.join(' \u00b7 ');
-  }
 
   _btn(icon, text, onClick, cls, title) {
     const b = document.createElement('button');
