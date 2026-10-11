@@ -26,7 +26,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.18.0';
+const ONYX_VERSION = '1.19.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -351,6 +351,8 @@ const STRINGS = {
     'vac.since': 'seit {t}',
     'vac.minutes': '{n} Min',
     'vac.area': '{n} m²',
+    'vac.map': 'Karte',
+    'vac.noMap': 'Karte gerade nicht verfügbar',
     'err.needVacuum': 'Die Entität muss aus der Domäne "vacuum" kommen.',
     'card.vacuum': 'Onyx Saugroboter-Karte',
     'card.vacuum.d': 'Akkuring, Räume und Verbrauchsteile',
@@ -911,6 +913,8 @@ const STRINGS = {
     'vac.since': 'for {t}',
     'vac.minutes': '{n} min',
     'vac.area': '{n} m²',
+    'vac.map': 'Map',
+    'vac.noMap': 'Map currently unavailable',
     'err.needVacuum': 'The entity must come from the "vacuum" domain.',
     'card.vacuum': 'Onyx Vacuum Card',
     'card.vacuum.d': 'Battery ring, rooms and consumables',
@@ -5462,6 +5466,42 @@ function sinceMin(iso) {
   return m >= 0 && m < 60 * 24 ? m : null;
 }
 
+/**
+ * Ein Saugroboter von oben, als Zeichnung statt Foto: rundes Gehäuse,
+ * Lidar-Turm, Stossleiste vorn und die Seitenbürste. Zwei Farben, weil die
+ * Geräte meist in Schwarz oder Weiss kommen — ein eigenes Foto geht über
+ * `image:`.
+ */
+const VAC_ROBOT = {
+  schwarz: { body: '#1c2026', rim: '#3b424c', top: '#262b33', tower: '#30363f',
+             lens: '#0b0d10', line: 'rgba(255,255,255,.14)', brush: '#8a96a3' },
+  weiss:   { body: '#eef1f4', rim: '#c3cad2', top: '#f8fafb', tower: '#dde2e8',
+             lens: '#3a434d', line: 'rgba(0,0,0,.10)', brush: '#9aa6b2' }
+};
+const VAC_ROBOT_ALIAS = { black: 'schwarz', white: 'weiss', 'weiß': 'weiss' };
+
+function vacRobotSvg(farbe) {
+  const roh = String(farbe).toLowerCase();
+  const c = VAC_ROBOT[VAC_ROBOT_ALIAS[roh] || roh] || VAC_ROBOT.schwarz;
+  return `
+    <svg viewBox="0 0 100 100" class="robo" aria-hidden="true">
+      <circle cx="50" cy="50" r="47" fill="${c.rim}"/>
+      <circle cx="50" cy="50" r="43.5" fill="${c.body}"/>
+      <path d="M17 32 A40 40 0 0 1 83 32" fill="none" stroke="${c.line}" stroke-width="3"
+            stroke-linecap="round"/>
+      <circle cx="50" cy="56" r="27" fill="${c.top}" stroke="${c.line}" stroke-width="1"/>
+      <circle cx="50" cy="30" r="12" fill="${c.tower}" stroke="${c.line}" stroke-width="1.2"/>
+      <circle cx="50" cy="30" r="5" fill="${c.lens}"/>
+      <circle cx="48.4" cy="28.4" r="1.4" fill="rgba(255,255,255,.55)"/>
+      <rect x="44" y="73" width="12" height="3.4" rx="1.7" fill="${c.line}"/>
+      <g stroke="${c.brush}" stroke-width="1.3" stroke-linecap="round" opacity=".8">
+        <path d="M22 30 l-7 -2"/><path d="M22 30 l3.2 -6.4"/><path d="M22 30 l3.8 6.2"/>
+        <path d="M22 30 l-5.5 4.5"/><path d="M22 30 l-2.2 -7"/>
+      </g>
+      <circle cx="22" cy="30" r="1.8" fill="${c.brush}"/>
+    </svg>`;
+}
+
 class OnyxVacuumCard extends OnyxBase {
   static get CSS() {
     return PAL_CSS + `
@@ -5500,6 +5540,22 @@ class OnyxVacuumCard extends OnyxBase {
     ha-card.off .prim, ha-card.off .gbtn{ cursor:default; }
     @keyframes onyxspin{ to{ transform:rotate(360deg) } }
     .ring.run{ animation:onyxspin 3.4s linear infinite; }
+    /* Mit Bild wird der Ring grösser: das Gerät steht dann selbst im Ring. */
+    .ring.big{ width:66px; height:66px; padding:3px; }
+    .ring.big > .vico{ overflow:hidden; }
+    .ring > .vico .robo{ width:88%; height:88%; display:block; }
+    .ring > .vico img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    /* Die Karte der Wohnung. Das Bild liefert die Kamera-Entität der
+       Integration; während des Saugens schickt sie laufend ein neues. */
+    .map{ position:relative; border-radius:16px; overflow:hidden; cursor:pointer;
+          background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.07);
+          min-height:120px; display:grid; place-items:center; }
+    .map img{ width:100%; max-height:var(--map-h, 320px); object-fit:contain; display:block; }
+    .map .nomap{ display:flex; flex-direction:column; align-items:center; gap:6px;
+                 padding:22px 12px; font-size:12px; color:#72879a; --mdc-icon-size:26px;
+                 text-align:center; }
+    .map.held{ transform:scale(.99); }
     .ring.run > .vico{ animation:onyxspin 3.4s linear infinite reverse; }
 
     .lab{ font-size:11px; line-height:14px; color:#6f8497; }
@@ -5721,8 +5777,24 @@ class OnyxVacuumCard extends OnyxBase {
       open: this._open,
       hasRooms: rooms.length > 0,
       hasCons: (normList(this._config.consumables) || []).length > 0,
-      showFan: this._config.show_fan_speed !== false
+      showFan: this._config.show_fan_speed !== false,
+      robot: this._config.robot || null,
+      image: this._config.image || null,
+      map: this._mapModel()
     };
+  }
+
+  /**
+   * Die Karte kommt als Kamera (Dreame, Xiaomi Cloud Map Extractor) oder als
+   * Bild-Entität. Gezeigt wird, was Home Assistant als `entity_picture`
+   * führt — darin steckt schon der Zugangsschlüssel.
+   */
+  _mapModel() {
+    const id = this._config.map;
+    if (!id) return null;
+    const st = this._hass.states[id];
+    const url = st && !isDead(st) ? st.attributes.entity_picture : null;
+    return { id, url: url || null, h: Number(this._config.map_height) || null };
   }
 
   /** Zustand in Worte: die Kopfzeile knapp, die Zeile darunter ausführlich */
@@ -5805,8 +5877,12 @@ class OnyxVacuumCard extends OnyxBase {
     <ha-card class="${(cls + (warm ? ' warm' : '') + (m.dead ? ' off' : '')).trim()}"${style}>
       <div class="head">
         <div class="hleft" id="hl">
-          <div class="ring ${ringCls}" style="--b:${m.batt == null ? 0 : m.batt}">
-            <div class="vico"><ha-icon icon="${esc(m.icon)}"></ha-icon></div>
+          <div class="ring ${ringCls}${m.robot || m.image ? ' big' : ''}"
+               style="--b:${m.batt == null ? 0 : m.batt}">
+            <div class="vico">${m.image
+              ? `<img src="${esc(m.image)}" alt="">`
+              : m.robot ? vacRobotSvg(m.robot)
+                : `<ha-icon icon="${esc(m.icon)}"></ha-icon>`}</div>
           </div>
           <div style="min-width:0">
             <div class="lab">${esc(m.label)}</div>
@@ -5821,6 +5897,13 @@ class OnyxVacuumCard extends OnyxBase {
 
       ${m.error ? `<div class="warn"><ha-icon icon="mdi:alert-circle-outline"></ha-icon>${esc(m.error)}</div>`
         : m.dead ? '' : `<div class="sub">${esc(this._summary(m))}</div>`}
+
+      ${m.map ? `
+      <div class="map" id="vmap"${m.map.h ? ` style="--map-h:${m.map.h}px"` : ''}>
+        ${m.map.url
+          ? `<img src="${esc(m.map.url)}" alt="${esc(t('vac.map'))}">`
+          : `<div class="nomap"><ha-icon icon="mdi:map-outline"></ha-icon>${esc(t('vac.noMap'))}</div>`}
+      </div>` : ''}
 
       <div class="ctl">
         <div class="prim glass ${(m.busy || m.picked) && !m.dead ? 'on' : ''}" id="prim">
@@ -5923,6 +6006,9 @@ class OnyxVacuumCard extends OnyxBase {
     root.querySelectorAll('[data-cons]').forEach((el) => {
       this._press(el, { onTap: () => fireMoreInfo(this, el.dataset.cons) });
     });
+
+    const karte = root.getElementById('vmap');
+    if (karte) this._press(karte, { onTap: () => fireMoreInfo(this, m.map.id) });
   }
 
   getCardSize() {

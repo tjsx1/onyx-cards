@@ -956,6 +956,16 @@ rooms:
 | `room_command` | `app_segment_clean` | Der Befehl, den `vacuum.send_command` bekommt |
 | `consumables` | — | Sensoren für Filter, Bürsten, Wischtuch |
 | `show_fan_speed` | `true` | Blendet die Stufenreihe aus |
+| `map` | — | Kamera- oder Bild-Entität mit der Karte der Wohnung, z. B. `camera.x50_master_map` (Dreame) |
+| `map_height` | `320` | Grösste Höhe der Karte in Pixeln |
+| `robot` | — | Zeichnet das Gerät in den Akkuring: `schwarz` oder `weiss` |
+| `image` | — | Eigenes Foto statt Zeichnung, z. B. `/local/x50.png` — wird rund zugeschnitten |
+
+**Karte und Gerätebild.** Mit `map:` steht unter der Statuszeile die Karte, die die
+Integration als Kamera führt; während des Saugens kommt laufend ein neues Bild.
+Antippen öffnet das Detailfenster der Kamera. Liefert die Integration gerade keine
+Karte, steht dort ein Hinweis statt einer leeren Fläche. Mit `robot:` oder `image:`
+wird der Akkuring grösser und trägt das Gerät selbst.
 
 **Der Akkuring.** Der Symbolkreis oben links trägt den Akkustand als Kegelverlauf.
 Damit steht die Zahl zweimal da: als Ring zum Überfliegen, als Prozentwert zum
@@ -1723,6 +1733,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.19.0** — Saugroboter-Karte: **Karte der Wohnung** über `map:` (Kamera- oder Bild-Entität, z. B. Dreame `camera.…_map`), und das **Gerät im Akkuring** — gezeichnet in Schwarz oder Weiss (`robot:`) oder als eigenes Foto (`image:`)
 
 **1.18.0** — Neue Karte **`onyx-quick-card`**: Favoriten aus dem ganzen Haus. Lampen als Kacheln, die in ihrer Farbe glühen; Storen als Zeilen mit den drei Fahrknöpfen. Halten öffnet ein Menü über der Karte: bei Lampen die ausgeklappte Licht-Karte, bei Storen Position und Lamellen *Zu · Halb · Offen* — wahlweise über ein eigenes Skript (`tilt_script`)
 
