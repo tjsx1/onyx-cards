@@ -4,7 +4,7 @@
 [Sprache / Language](#sprache--language) below for what that means and how to switch.
 The reference documentation on this page is German.
 
-Vierzehn Lovelace-Karten für Home Assistant: dunkle Flächen, Glasknöpfe, sieben wählbare
+Fünfzehn Lovelace-Karten für Home Assistant: dunkle Flächen, Glasknöpfe, sieben wählbare
 Kartenfarben — für die Bedienung am Handy gebaut.
 
 Keine Abhängigkeiten — weder button-card noch card-mod nötig. Alle Karten lassen sich
@@ -28,6 +28,7 @@ Keine Abhängigkeiten — weder button-card noch card-mod nötig. Alle Karten la
 | `onyx-status-card` | Mehrere Zustände in einer Karte, aus Bausteinen und Vorlagen |
 | `onyx-climate-card` | Thermostat mit Ring, Betriebsarten und Voreinstellungen — der Ring steckt auch in der Raum-Karte |
 | `onyx-energy-card` | Energiefluss zwischen Netz, PV, Batterie, Haus und Wallbox |
+| `onyx-quick-card` | Favoriten aus dem ganzen Haus: Lampen als Kacheln, Storen als Zeilen mit Fahrknöpfen |
 
 ## Installation über HACS
 
@@ -1525,6 +1526,50 @@ Zeile ganz. Ein Sensor schlägt immer den gerechneten Wert.
 
 **Ein Tipp auf einen Knoten** öffnet das Detailfenster des Sensors dahinter.
 
+### onyx-quick-card
+
+Favoriten aus dem ganzen Haus in einer Karte — die Lampen und Storen, die man
+täglich braucht, ohne erst den Raum zu öffnen. Oben die Lampen als Kacheln in zwei
+Spalten, darunter die Storen als Zeilen mit **auf · Halt · zu**, wie in der Raum-Karte.
+
+```yaml
+type: custom:onyx-quick-card
+title: Schnellzugriff
+tilt_script: script.storen_neigung_setzen   # optional
+lights:
+  - entity: light.wohnzimmer
+    name: Wohnzimmerlampe
+    room: WZ
+  - light.kueche
+covers:
+  - entity: cover.wohnzimmer_sued
+    name: Süd
+```
+
+| Option | Vorgabe | Wirkung |
+|---|---|---|
+| `lights` (`lampen`) | — | Lampen-Kacheln. Erlaubt sind auch `switch.` und andere schaltbare Entitäten |
+| `covers` (`storen`, `rollos`) | — | Storen-Zeilen |
+| `room` am Eintrag | — | kleine Raumangabe neben dem Namen der Kachel |
+| `title` | `Schnellzugriff` | Überschrift |
+| `icon` | `mdi:star-outline` | Symbol der Überschrift |
+| `tilt_script` | — | Skript für die Lamellen-Knöpfe; bekommt `store` und `modus` (`zu`/`halb`/`offen`). Ohne Skript setzen die Knöpfe den Lamellenwinkel auf 0/50/100 % |
+| `color`, `tinted` | — | wie bei der Raum-Karte |
+
+**Bedienung.** Kachel antippen schaltet die Lampe. **Halten** öffnet über der Karte
+die ausgeklappte Licht-Karte — Helligkeit, Farbtemperatur, Farbrad, Effekte; ein
+reiner Schalter öffnet stattdessen das Detailfenster. Eine Storen-Zeile antippen
+fährt die Store auf bzw. zu, während der Fahrt hält ein Tipp sie an. **Halten** öffnet
+Position (ziehen oder tippen), die drei Fahrknöpfe gross und die Lamellen *Zu · Halb ·
+Offen*. Ein Tipp auf den dunklen Rand oder das ✕ schliesst das Menü.
+
+**Warum Lamellen-Knöpfe statt Winkel.** Viele Raffstoren melden ihren Lamellenwinkel
+nicht verlässlich — der Wert in Home Assistant sagt dann nichts über die echte
+Stellung. Die Karte zeigt darum keinen Winkel, sondern markiert nur den zuletzt
+gewählten Knopf.
+
+Einen visuellen Editor hat die Karte noch nicht; sie wird in YAML eingerichtet.
+
 ## Visueller Editor
 
 Alle Karten bringen einen eigenen Editor mit. Beim Hinzufügen über
@@ -1678,6 +1723,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.18.0** — Neue Karte **`onyx-quick-card`**: Favoriten aus dem ganzen Haus. Lampen als Kacheln, die in ihrer Farbe glühen; Storen als Zeilen mit den drei Fahrknöpfen. Halten öffnet ein Menü über der Karte: bei Lampen die ausgeklappte Licht-Karte, bei Storen Position und Lamellen *Zu · Halb · Offen* — wahlweise über ein eigenes Skript (`tilt_script`)
 
 **1.17.0** — Raum-Karte: die **Storen-Zeile** bringt ihre Bedienung mit, statt sich ein zweites Mal aufzuklappen. Rechts in der Zeile stehen die drei Fahrknöpfe **auf · Halt · zu** wie in der Storen-Karte, unter dem Namen die Höhe und der Lamellenwinkel in Grad; der Winkel ist antippbar und fährt die Lamellen ganz auf oder ganz zu. Tippen, Ziehen und Halten der Zeile bleiben, wie sie waren. Auf einer halben Spalte fällt das Wort *Lamellen* weg.
 

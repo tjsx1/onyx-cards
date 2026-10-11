@@ -17,6 +17,7 @@
  *   custom:onyx-status-card  – mehrere Zustände in einer Karte
  *   custom:onyx-climate-card – Temperaturring mit Skala und Betriebsarten
  *   custom:onyx-energy-card  – Flussbild zwischen Sonne, Netz, Batterie und Haus
+ *   custom:onyx-quick-card   – Schnellzugriff: Lampen-Kacheln und Storen-Zeilen
  *
  * Installation:
  *   1. Datei nach /config/www/onyx-cards.js kopieren
@@ -25,7 +26,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.17.0';
+const ONYX_VERSION = '1.18.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -366,6 +367,20 @@ const STRINGS = {
     'ed.h.consumables': 'Sensoren in Prozent; für Stundenzähler den vollen Wert angeben',
     'ed.addRoom': 'Raum',
     inRoom: '{g} im Raum',
+    qk: 'Schnellzugriff',
+    'card.quick': 'Onyx Favoriten (Lampen & Storen)',
+    'card.quick.d': 'Lieblingslampen als Kacheln, Storen als Zeilen mit Fahrknöpfen',
+    'err.qkEmpty': 'Bitte unter lights oder covers mindestens eine Entität angeben.',
+    'qk.opening': 'öffnet …',
+    'qk.closing': 'schliesst …',
+    'qk.up': 'Auf',
+    'qk.stop': 'Halt',
+    'qk.down': 'Zu',
+    'qk.close': 'Schliessen',
+    'qk.slats': 'Lamellen',
+    'qk.tilt.zu': 'Zu',
+    'qk.tilt.halb': 'Halb',
+    'qk.tilt.offen': 'Offen',
     'log.dup': '"{tag}" ist bereits registriert — diese Datei ({v}) wird ignoriert. '
       + 'Vermutlich sind zwei Ressourcen eingetragen: die alte unter /local/ und die von '
       + 'HACS unter /hacsfiles/. Den alten Eintrag unter Einstellungen → Dashboards → ⋮ → '
@@ -912,6 +927,20 @@ const STRINGS = {
     'ed.h.consumables': 'Percentage sensors; for hour counters give the full value',
     'ed.addRoom': 'Room',
     inRoom: '{g} in this room',
+    qk: 'Quick access',
+    'card.quick': 'Onyx favourites (lights & covers)',
+    'card.quick.d': 'Favourite lights as tiles, covers as rows with drive buttons',
+    'err.qkEmpty': 'Please list at least one entity under lights or covers.',
+    'qk.opening': 'opening …',
+    'qk.closing': 'closing …',
+    'qk.up': 'Up',
+    'qk.stop': 'Stop',
+    'qk.down': 'Down',
+    'qk.close': 'Close',
+    'qk.slats': 'Slats',
+    'qk.tilt.zu': 'Closed',
+    'qk.tilt.halb': 'Half',
+    'qk.tilt.offen': 'Open',
     'log.dup': '"{tag}" is already registered — this file ({v}) is being ignored. '
       + 'Most likely two resources are set up: the old one under /local/ and the HACS one '
       + 'under /hacsfiles/. Remove the old entry under Settings → Dashboards → ⋮ → Resources.',
@@ -11713,6 +11742,440 @@ class OnyxEnergyEditor extends OnyxEditor {
   }
 }
 
+/* ================================================================== *
+ * 15) SCHNELLZUGRIFF-KARTE
+ *
+ * Favoriten aus dem ganzen Haus in einer Karte: oben die Lampen als
+ * Kacheln, darunter die Storen als Zeilen mit ihren drei Fahrknöpfen.
+ * Tippen schaltet bzw. fährt, Halten öffnet ein Menü über der Karte —
+ * bei Lampen die ausgeklappte Licht-Karte, bei Storen Position und
+ * Lamellen.
+ * ================================================================== */
+
+/** Lamellenstellungen der Storen-Zeile und ihr Winkel ohne Skript */
+const QK_TILT = { zu: 0, halb: 50, offen: 100 };
+
+class OnyxQuickCard extends OnyxBase {
+  static get CSS() {
+    return PAL_CSS + `
+    ha-card{
+      padding:12px; border-radius:var(--onyx-r, 24px); border:1px solid rgba(255,255,255,.09);
+      display:flex; flex-direction:column; gap:10px; overflow:hidden;
+      position:relative; box-shadow:none;
+    }
+    ha-card.warm{
+      background:linear-gradient(to right bottom, var(--w1) 0%, var(--w2) 100%);
+    }
+    .head{ display:flex; align-items:center; gap:11px; }
+    .hico{ width:34px;height:34px;border-radius:50%;flex:none;
+           background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.10);
+           display:grid; place-items:center; color:var(--acc); --mdc-icon-size:18px; }
+    .hname{ font-size:13px; font-weight:600; line-height:18px; color:#e9f1f8;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .grp{ display:flex; justify-content:space-between; align-items:baseline;
+          font-size:11px; color:#6f9fc0; padding-top:2px; }
+    .grp b{ font-weight:600; color:var(--acc); }
+
+    /* Die Kachel einer Lampe. Leuchtet sie, nimmt die Kachel ihre Farbe an
+       — dieselbe Tönung, mit der auch die Licht-Karte arbeitet. */
+    .tiles{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+    .tile{ --lite:var(--acc); height:88px; border-radius:16px; padding:10px 11px;
+           display:flex; flex-direction:column; justify-content:space-between;
+           background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.06);
+           cursor:pointer; touch-action:pan-y; user-select:none; -webkit-user-select:none;
+           transition:transform .12s ease, background .18s ease; }
+    .tile.on{ background:color-mix(in srgb, var(--lite) 20%, transparent);
+              border-color:color-mix(in srgb, var(--lite) 32%, transparent); }
+    .tile.dead{ opacity:.45; }
+    .tile.held{ transform:scale(.96); }
+    .ttop{ display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .tico{ width:32px; height:32px; border-radius:50%; flex:none; display:grid;
+           place-items:center; --mdc-icon-size:17px; color:#8ea3b5;
+           background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.10); }
+    .tile.on .tico{ color:#fff;
+      background:color-mix(in srgb, var(--lite) 60%, transparent);
+      border-color:color-mix(in srgb, var(--lite) 78%, transparent);
+      box-shadow:0 0 16px color-mix(in srgb, var(--lite) 35%, transparent); }
+    .tval{ font-size:12.5px; font-weight:600; color:#7b8fa0;
+           font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .tile.on .tval{ color:#e9f1f8; }
+    .tbot{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+    .tn{ display:flex; align-items:baseline; gap:6px; min-width:0; }
+    .tname{ font-size:13px; font-weight:500; color:#9fb0be; min-width:0;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .tile.on .tname{ color:#e9f1f8; }
+    .troom{ font-size:11px; color:#6f8497; white-space:nowrap; flex:none; }
+    .tl{ height:4px; border-radius:2px; background:rgba(255,255,255,.08); overflow:hidden; }
+    .tl i{ display:block; height:100%; border-radius:2px;
+           background:color-mix(in srgb, var(--lite) 85%, transparent); }
+
+    /* Die Storen-Zeile — dieselbe wie in der Raum-Karte. */
+    .rows{ display:flex; flex-direction:column; gap:7px; }
+    .lrow{ position:relative; overflow:hidden; border-radius:12px; height:58px;
+           display:flex; align-items:center; gap:11px; padding:0 10px 0 12px;
+           background:rgba(255,255,255,.055); cursor:pointer; touch-action:pan-y;
+           user-select:none; -webkit-user-select:none; }
+    .lrow.held{ transform:scale(.98); }
+    .lfill{ position:absolute; left:0; top:0; bottom:0; transition:width .3s linear;
+            background:color-mix(in srgb, var(--acc) 22%, transparent); }
+    .lrow > *:not(.lfill){ position:relative; z-index:1; }
+    .lico{ width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+           background:linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.045));
+           border:1px solid rgba(255,255,255,.11); color:#c8d8e6; --mdc-icon-size:16px; }
+    .lico.grad{ background:color-mix(in srgb, var(--btn) 60%, transparent);
+                border-color:color-mix(in srgb, var(--btn) 78%, transparent); color:#fff; }
+    .zwei{ flex:1; min-width:0; }
+    .lname{ font-size:13px; font-weight:500; color:#cddceb;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .unten{ font-size:11px; line-height:14px; color:var(--sub); margin-top:1px;
+            font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .lrow.off .lname{ color:#7b8fa0; }
+    .lrow.dead{ opacity:.45; }
+    .fbtns{ display:flex; gap:5px; flex:none; }
+    .fbtn{ width:34px; height:34px; border-radius:10px; flex:none; display:grid;
+           place-items:center; cursor:pointer; color:#fff; --mdc-icon-size:13px;
+           background:linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.045));
+           border:1px solid rgba(255,255,255,.11);
+           transition:transform .12s ease, background .18s ease; }
+    .fbtn.akt{ background:color-mix(in srgb, var(--btn) 60%, transparent);
+               border-color:color-mix(in srgb, var(--btn) 78%, transparent); }
+    .fbtn.dim{ opacity:.36; }
+    .fbtn.held{ transform:scale(.9); }
+
+    /* Das Menü liegt über der Karte. Ein Tipp auf den abgedunkelten Rand
+       schliesst es wieder. */
+    .ov{ position:absolute; inset:0; z-index:5; padding:10px; overflow-y:auto;
+         background:rgba(4,7,11,.72); -webkit-backdrop-filter:blur(3px);
+         backdrop-filter:blur(3px); display:flex; flex-direction:column; gap:8px; }
+    .obar{ display:flex; align-items:center; gap:8px; }
+    .otit{ flex:1; min-width:0; font-size:12px; color:#9fb0be;
+           overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ox{ width:34px; height:34px; border-radius:50%; flex:none; display:grid;
+         place-items:center; cursor:pointer; color:#e9f1f8; --mdc-icon-size:18px;
+         background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.12); }
+    .ox.held{ transform:scale(.9); }
+    .sheet{ border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:10px;
+            border:1px solid rgba(255,255,255,.10);
+            background:linear-gradient(to right bottom, var(--w1) 0%, var(--w2) 100%); }
+    .pbar{ position:relative; height:44px; border-radius:12px; overflow:hidden;
+           cursor:pointer; touch-action:none;
+           background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.06); }
+    .pfill{ position:absolute; left:0; top:0; bottom:0;
+            background:color-mix(in srgb, var(--btn) 45%, transparent); }
+    .pcap{ position:absolute; inset:0; display:flex; align-items:center; gap:8px;
+           padding:0 12px; font-size:12.5px; font-weight:600; color:#e9f1f8;
+           --mdc-icon-size:16px; pointer-events:none; white-space:nowrap; }
+    .fbig{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+    .fbig .fbtn{ width:auto; height:44px; border-radius:12px; --mdc-icon-size:16px; }
+    .plab{ font-size:11px; color:var(--lab); }
+    .tilts{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+    .tlt{ height:40px; border-radius:12px; display:grid; place-items:center; cursor:pointer;
+          font-size:12.5px; font-weight:600; color:#a9c3d6;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); }
+    .tlt.on{ color:#fff; background:color-mix(in srgb, var(--btn) 50%, transparent);
+             border-color:color-mix(in srgb, var(--btn) 70%, transparent); }
+    .tlt.held{ transform:scale(.95); }
+    `;
+  }
+
+  static getStubConfig(hass) {
+    const l = firstEntity(hass, 'light');
+    const c = firstEntity(hass, 'cover');
+    return { type: 'custom:onyx-quick-card', lights: l ? [l] : [], covers: c ? [c] : [] };
+  }
+
+  setConfig(config) {
+    const l = normList(config.lights || config.lampen) || [];
+    const c = normList(config.covers || config.storen || config.rollos) || [];
+    if (!l.length && !c.length) throw new Error(t('err.qkEmpty'));
+    this._menu = null;
+    this._tiltPick = this._tiltPick || {};
+    super.setConfig(config);
+  }
+
+  // Das Lampenmenü ist eine eigene Licht-Karte; sie braucht jeden neuen
+  // Stand von Home Assistant, auch wenn diese Karte selbst stillhält.
+  set hass(hass) {
+    super.hass = hass;
+    if (this._child) this._child.hass = hass;
+  }
+  get hass() { return this._hass; }
+
+  _model() {
+    const h = this._hass, cfg = this._config;
+    const lights = (normList(cfg.lights || cfg.lampen) || []).map((e) => {
+      const st = h.states[e.entity];
+      const d = e.entity.split('.')[0];
+      const dead = isDead(st);
+      const on = isOn(st);
+      const pct = pctOf(st);
+      const a = (st && st.attributes) || {};
+      const modes = a.supported_color_modes || [];
+      return {
+        id: e.entity,
+        name: e.name || nameOf(h, e.entity),
+        room: e.room || e.label || '',
+        icon: e.icon || a.icon || (d === 'light' ? 'mdi:lightbulb' : DEV_ICONS[d] || 'mdi:power'),
+        domain: d, on, dead,
+        pct: on ? (pct < 0 ? 100 : pct) : 0,
+        val: dead ? t('unavailable') : !on ? t('off') : (pct < 0 ? t('on') : `${pct} %`),
+        glow: d === 'light' ? lightGlow(st) : null,
+        menu: d === 'light' && !dead && modes.some((x) => x !== 'onoff')
+      };
+    });
+
+    const tiltScript = cfg.tilt_script || null;
+    const covers = (normList(cfg.covers || cfg.storen || cfg.rollos) || []).map((e) => {
+      const st = h.states[e.entity];
+      const dead = isDead(st);
+      const a = (st && st.attributes) || {};
+      const pos = Math.max(0, pctOf(st));
+      const state = st ? st.state : 'unavailable';
+      let text;
+      if (dead) text = t('unavailable');
+      else if (state === 'opening') text = t('qk.opening');
+      else if (state === 'closing') text = t('qk.closing');
+      else if (pos >= 98) text = t('open');
+      else if (pos <= 2) text = t('closed');
+      else text = t('pctOpen', { n: pos });
+      return {
+        id: e.entity,
+        name: e.name || nameOf(h, e.entity),
+        room: e.room || e.label || '',
+        icon: e.icon || a.icon || 'mdi:window-shutter',
+        pos, state, dead, text,
+        moving: state === 'opening' || state === 'closing',
+        tilt: !!tiltScript || ((a.supported_features || 0) & 128) !== 0
+      };
+    });
+
+    let menu = null;
+    if (this._menu) {
+      const list = this._menu.kind === 'light' ? lights : covers;
+      const it = list.find((x) => x.id === this._menu.id);
+      if (it) menu = { kind: this._menu.kind, it, pick: this._tiltPick[it.id] || null };
+      else this._menu = null;
+    }
+
+    return {
+      title: cfg.title || cfg.name || t('qk'),
+      icon: cfg.icon || 'mdi:star-outline',
+      color: cfg.color || null,
+      lights, covers, menu,
+      nOn: lights.filter((x) => x.on).length,
+      nOpen: covers.filter((x) => x.pos > 2).length
+    };
+  }
+
+  /**
+   * Ist das Lampenmenü offen, regelt die Licht-Karte darin alles selbst.
+   * Ein Neuaufbau hier würde sie mitten im Ziehen aus dem Dokument werfen.
+   */
+  _sigOf(m) {
+    if (m.menu && m.menu.kind === 'light') return 'menu:' + m.menu.it.id;
+    return JSON.stringify(m);
+  }
+
+  _html(m) {
+    const pal = paletteAttrs(m.color, this._config);
+    const tiles = m.lights.map((l) => `
+      <div class="tile ${l.on ? 'on' : ''} ${l.dead ? 'dead' : ''}" data-l="${esc(l.id)}"
+           ${l.glow ? `style="--lite:${esc(l.glow)}"` : ''}>
+        <div class="ttop">
+          <div class="tico"><ha-icon icon="${esc(l.icon)}"></ha-icon></div>
+          <div class="tval">${esc(l.val)}</div>
+        </div>
+        <div class="tbot">
+          <div class="tn"><span class="tname">${esc(l.name)}</span>${
+            l.room ? `<span class="troom">${esc(l.room)}</span>` : ''}</div>
+          <div class="tl"><i style="width:${l.pct}%"></i></div>
+        </div>
+      </div>`).join('');
+
+    const knoepfe = (c, gross) => {
+      const k = (was, icon, extra) => `
+        <div class="fbtn ${extra || ''}" data-cov="${was}" data-cid="${esc(c.id)}"
+             role="button" aria-label="${esc(t('qk.' + was))}">
+          <ha-icon icon="${icon}"></ha-icon></div>`;
+      return `
+        <div class="${gross ? 'fbig' : 'fbtns'}">
+          ${k('up', 'mdi:triangle', c.moving ? 'dim' : '')}
+          ${k('stop', 'mdi:square', c.moving ? 'akt' : '')}
+          ${k('down', 'mdi:triangle-down', c.moving ? 'dim' : '')}
+        </div>`;
+    };
+
+    const rows = m.covers.map((c) => `
+      <div class="lrow ${c.pos > 2 ? '' : 'off'} ${c.dead ? 'dead' : ''}" data-c="${esc(c.id)}">
+        <div class="lfill" style="width:${c.pos}%"></div>
+        <div class="lico ${c.pos > 2 ? 'grad' : ''}"><ha-icon icon="${esc(c.icon)}"></ha-icon></div>
+        <div class="zwei">
+          <div class="lname">${esc(c.name)}</div>
+          <div class="unten">${esc(c.text)}</div>
+        </div>
+        ${knoepfe(c, false)}
+      </div>`).join('');
+
+    let ov = '';
+    if (m.menu) {
+      const it = m.menu.it;
+      const titel = it.room ? `${it.name} · ${it.room}` : it.name;
+      const bar = `
+        <div class="obar">
+          <div class="otit">${esc(titel)}</div>
+          <div class="ox" role="button" aria-label="${esc(t('qk.close'))}">
+            <ha-icon icon="mdi:close"></ha-icon></div>
+        </div>`;
+      if (m.menu.kind === 'light') {
+        ov = `<div class="ov">${bar}<div class="slot"></div></div>`;
+      } else {
+        ov = `
+        <div class="ov">${bar}
+          <div class="sheet">
+            <div class="pbar" id="qpos">
+              <div class="pfill" style="width:${it.pos}%"></div>
+              <div class="pcap"><ha-icon icon="mdi:window-shutter-open"></ha-icon>
+                <span>${esc(it.text)}</span></div>
+            </div>
+            ${knoepfe(it, true)}
+            ${it.tilt ? `
+              <div class="plab">${esc(t('qk.slats'))}</div>
+              <div class="tilts">
+                ${Object.keys(QK_TILT).map((k) => `
+                  <div class="tlt ${m.menu.pick === k ? 'on' : ''}" data-tilt="${k}"
+                       role="button">${esc(t('qk.tilt.' + k))}</div>`).join('')}
+              </div>` : ''}
+          </div>
+        </div>`;
+      }
+    }
+
+    return `
+      <ha-card class="${pal.cls.trim()}${m.nOn || m.nOpen ? ' warm' : ''}"${pal.style}>
+        <div class="head">
+          <div class="hico"><ha-icon icon="${esc(m.icon)}"></ha-icon></div>
+          <div class="hname">${esc(m.title)}</div>
+        </div>
+        ${m.lights.length ? `
+          <div class="grp"><span>${esc(t('group.light'))}</span>
+            <b>${esc(t('nOfMOn', { n: m.nOn, m: m.lights.length }))}</b></div>
+          <div class="tiles">${tiles}</div>` : ''}
+        ${m.covers.length ? `
+          <div class="grp"><span>${esc(t('group.cover'))}</span>
+            <b>${esc(t('nOfMOpen', { n: m.nOpen, m: m.covers.length }))}</b></div>
+          <div class="rows">${rows}</div>` : ''}
+        ${ov}
+      </ha-card>`;
+  }
+
+  _openMenu(kind, id) {
+    this._menu = { kind, id };
+    this._repaint();
+  }
+
+  _closeMenu() {
+    this._menu = null;
+    this._child = null;
+    this._repaint();
+  }
+
+  _bind(m) {
+    const root = this.shadowRoot;
+    this._child = null;
+
+    root.querySelectorAll('.tile[data-l]').forEach((el) => {
+      const l = m.lights.find((x) => x.id === el.dataset.l);
+      if (!l) return;
+      this._press(el, {
+        onTap: () => {
+          if (l.dead) return;
+          if (l.domain === 'light') this.call('light', 'toggle', { entity_id: l.id });
+          else this.call('homeassistant', 'toggle', { entity_id: l.id });
+        },
+        onHold: () => (l.menu ? this._openMenu('light', l.id) : fireMoreInfo(this, l.id))
+      });
+    });
+
+    // Die Fahrknöpfe liegen in der Zeile, die selbst auf Tippen hört —
+    // also halten sie ihre Ereignisse bei sich, wie in der Raum-Karte.
+    const DIENST = { up: 'open_cover', stop: 'stop_cover', down: 'close_cover' };
+    root.querySelectorAll('.fbtn[data-cov]').forEach((knopf) => {
+      const dienst = DIENST[knopf.dataset.cov];
+      const id = knopf.dataset.cid;
+      if (!dienst || !id) return;
+      ['pointerdown', 'pointerup', 'click'].forEach((art) =>
+        knopf.addEventListener(art, (ev) => ev.stopPropagation()));
+      this._press(knopf, { onTap: () => this.call('cover', dienst, { entity_id: id }) });
+    });
+
+    // Ein Tipp auf die Zeile: fährt sie, hält sie an; sonst fährt sie
+    // dorthin, wo sie gerade nicht ist.
+    root.querySelectorAll('.lrow[data-c]').forEach((el) => {
+      const c = m.covers.find((x) => x.id === el.dataset.c);
+      if (!c) return;
+      this._press(el, {
+        onTap: () => {
+          if (c.dead) return;
+          if (c.moving) this.call('cover', 'stop_cover', { entity_id: c.id });
+          else this.call('cover', c.pos > 2 ? 'close_cover' : 'open_cover', { entity_id: c.id });
+        },
+        onHold: () => this._openMenu('cover', c.id)
+      });
+    });
+
+    if (!m.menu) return;
+    const ov = root.querySelector('.ov');
+    ov.addEventListener('click', (ev) => { if (ev.target === ov) this._closeMenu(); });
+    this._press(root.querySelector('.ox'), { onTap: () => this._closeMenu() });
+
+    if (m.menu.kind === 'light') {
+      const kind = document.createElement('onyx-light-card');
+      kind.setConfig({
+        type: 'custom:onyx-light-card', entity: m.menu.it.id,
+        name: m.menu.it.name, always_open: true
+      });
+      kind.hass = this._hass;
+      root.querySelector('.slot').appendChild(kind);
+      this._child = kind;
+      return;
+    }
+
+    const it = m.menu.it;
+    const bar = root.querySelector('#qpos');
+    if (bar) {
+      const fill = bar.querySelector('.pfill');
+      const cap = bar.querySelector('.pcap span');
+      const zeig = (p) => { fill.style.width = p + '%'; cap.textContent = t('pctOpen', { n: p }); };
+      const setze = (p) => this.call('cover', 'set_cover_position', { entity_id: it.id, position: p });
+      this._press(bar, { onDrag: zeig, onDrop: setze, onTap: (p) => { zeig(p); setze(p); } });
+    }
+
+    root.querySelectorAll('.tlt[data-tilt]').forEach((el) => {
+      const modus = el.dataset.tilt;
+      this._press(el, {
+        onTap: () => {
+          this._tiltPick[it.id] = modus;
+          const skript = this._config.tilt_script;
+          if (skript) {
+            this.call('script', String(skript).replace(/^script\./, ''), { store: it.id, modus });
+          } else {
+            this.call('cover', 'set_cover_tilt_position',
+              { entity_id: it.id, tilt_position: QK_TILT[modus] });
+          }
+          this._repaint();
+        }
+      });
+    });
+  }
+
+  getCardSize() {
+    const m = this._config || {};
+    const nl = (normList(m.lights || m.lampen) || []).length;
+    const nc = (normList(m.covers || m.storen || m.rollos) || []).length;
+    return 1 + Math.ceil(nl / 2) * 2 + nc;
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * Registrierung der Editoren
  * ------------------------------------------------------------------ */
@@ -11792,6 +12255,7 @@ defineCard('onyx-lock-card', OnyxLockCard);
 defineCard('onyx-status-card', OnyxStatusCard);
 defineCard('onyx-climate-card', OnyxClimateCard);
 defineCard('onyx-energy-card', OnyxEnergyCard);
+defineCard('onyx-quick-card', OnyxQuickCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push(
@@ -11878,6 +12342,12 @@ window.customCards.push(
     name: t('card.energy'),
     description: t('card.energy.d'),
     preview: true
+  },
+  {
+    type: 'onyx-quick-card',
+    name: t('card.quick'),
+    description: t('card.quick.d'),
+    preview: true
   }
 );
 
@@ -11885,5 +12355,5 @@ export {
   OnyxRoomCard, OnyxSliderCard, OnyxCoverCard,
   OnyxMediaCard, OnyxActionsCard, OnyxChartCard, OnyxVacuumCard, OnyxWeatherCard,
   OnyxLightCard, OnyxCameraCard, OnyxLockCard, OnyxStatusCard, OnyxClimateCard,
-  OnyxEnergyCard
+  OnyxEnergyCard, OnyxQuickCard
 };
