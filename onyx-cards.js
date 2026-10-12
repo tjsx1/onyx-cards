@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.29.0';
+const ONYX_VERSION = '1.30.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -6321,9 +6321,14 @@ const MOW_BUSY = ['mowing', 'returning', 'paused', 'error'];
  * Gezeichnet wird hier selbst statt mit einem Bild der Integration, damit
  * die Karte die Farben der Onyx-Karten trägt.
  */
-function mowerMapSvg(a, picked, house) {
+function mowerMapSvg(a, picked, house, rotation) {
+  // `map_rotation` dreht die ganze Karte (Grad gegen den Uhrzeigersinn),
+  // z. B. damit das Haus gerade steht und der Garten so schräg liegt wie echt
+  const rad = (Number(rotation) || 0) * Math.PI / 180;
+  const cs = Math.cos(rad), sn = Math.sin(rad);
+  const R = (x, y) => ({ x: x * cs - y * sn, y: x * sn + y * cs });
   const pts = (list) => (Array.isArray(list) ? list : [])
-    .map((p) => (Array.isArray(p) ? { x: +p[0], y: +p[1] } : { x: +p.x, y: +p.y }))
+    .map((p) => (Array.isArray(p) ? R(+p[0], +p[1]) : R(+p.x, +p.y)))
     .filter((p) => isFinite(p.x) && isFinite(p.y));
   const info = a.info || {};
   const ids = Array.isArray(info.lawn_ids) ? info.lawn_ids.map(String) : [];
@@ -6334,10 +6339,12 @@ function mowerMapSvg(a, picked, house) {
   const obstacles = (info.obstacles || []).map(pts).filter((o) => o.length > 2);
   const trace = a.trace || {};
   const lanes = (trace.lanes || []).filter((l) => Array.isArray(l) && l.length >= 4)
-    .map((l) => l.map(Number)).filter((l) => l.slice(0, 4).every(isFinite));
+    .map((l) => l.map(Number)).filter((l) => l.slice(0, 4).every(isFinite))
+    .map((l) => { const p = R(l[0], l[1]), q = R(l[2], l[3]); return [p.x, p.y, q.x, q.y, l[4]]; });
   const edges = (trace.edges || []).map(pts).filter((e) => e.length > 1);
   const pos = a.current_position && isFinite(+a.current_position.x)
-    ? { x: +a.current_position.x, y: +a.current_position.y, a: +a.current_position.a } : null;
+    ? Object.assign(R(+a.current_position.x, +a.current_position.y),
+      { a: +a.current_position.a + (Number(rotation) || 0) }) : null;
   const charge = pts(a.charge_positions);
   // Nur das letzte Stück der Fahrspur: wo gemäht ist, zeigen die Bahnen —
   // die ganze Spur würde sie übermalen.
@@ -6366,7 +6373,7 @@ function mowerMapSvg(a, picked, house) {
   const stripe = (l) => (isFinite(l[4]) ? l[4]
     : Math.round((Math.abs(l[0] - l[2]) < Math.abs(l[1] - l[3]) ? l[0] : l[1]) / 100)) % 2;
   const laneD = (odd) => lanes.filter((l) => stripe(l) === odd)
-    .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('');
+    .map((l) => `M${Math.round(l[0])} ${Math.round(-l[1])}L${Math.round(l[2])} ${Math.round(-l[3])}`).join('');
 
   const houseSvg = hw.length ? `
       <mask id="mhaus" maskUnits="userSpaceOnUse" x="${vx}" y="${vy}" width="${vw}" height="${vh}">
@@ -6375,7 +6382,7 @@ function mowerMapSvg(a, picked, house) {
       </mask>
       <path class="house" d="${pth(hw[0], true)}"/>
       <rect class="hwall" x="${vx}" y="${vy}" width="${vw}" height="${vh}" mask="url(#mhaus)"/>
-      ${hl.map((l) => `<text class="hlab" x="${Math.round(+l.x)}" y="${Math.round(-l.y)}"
+      ${hl.map((l) => R(+l.x, +l.y)).map((q, i) => ({ x: q.x, y: q.y, name: hl[i].name })).map((l) => `<text class="hlab" x="${Math.round(+l.x)}" y="${Math.round(-l.y)}"
         font-size="${Math.round(vw * 0.022)}">${esc(l.name)}</text>`).join('')}` : '';
 
   return `
@@ -6633,7 +6640,7 @@ class OnyxMowerCard extends OnyxVacuumCard {
     let svg = null;
     const house = Array.isArray(this._config.map_walls)
       ? { walls: this._config.map_walls, labels: this._config.house_labels || [] } : null;
-    try { svg = mowerMapSvg(st.attributes || {}, this._picked, house); } catch (e) { svg = null; }
+    try { svg = mowerMapSvg(st.attributes || {}, this._picked, house, this._config.map_rotation); } catch (e) { svg = null; }
     return { id, h, svg, url: null };
   }
 
