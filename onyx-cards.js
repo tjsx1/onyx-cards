@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.25.0';
+const ONYX_VERSION = '1.26.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -5615,6 +5615,8 @@ class OnyxVacuumCard extends OnyxBase {
                  text-align:center; }
     .map.held{ transform:scale(.99); }
     .map svg.vclip{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block; }
+    /* Mauern aus dem Grundriss über der Roboterkarte */
+    .map svg.vclip .wall{ fill:#c8d2dc; }
     .ring.run > .vico{ animation:onyxspin 3.4s linear infinite reverse; }
 
     .lab{ font-size:11px; line-height:14px; color:#6f8497; }
@@ -5915,7 +5917,9 @@ class OnyxVacuumCard extends OnyxBase {
    * Ausschnitt richtig, auch wenn die Karte wächst.
    */
   _mapClip(st, url) {
-    const poly = this._config.map_clip;
+    const walls = Array.isArray(this._config.map_walls) ? this._config.map_walls : null;
+    // Ohne eigenen Zuschnitt gilt der Aussenumriss des Grundrisses
+    const poly = this._config.map_clip || (walls && walls[0]);
     if (!Array.isArray(poly) || poly.length < 3) return null;
     const f = vacCalib(st.attributes.calibration_points);
     if (!f) return null;
@@ -5937,6 +5941,8 @@ class OnyxVacuumCard extends OnyxBase {
       return null;
     }
     const pts = poly.map((p) => f(+p[0], +p[1]));
+    const toPts = (list) => list.map((p) => f(+p[0], +p[1]))
+      .map((q) => `${Math.round(q.x)},${Math.round(q.y)}`).join(' ');
     const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
     const pad = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * 0.03;
     return {
@@ -5944,7 +5950,10 @@ class OnyxVacuumCard extends OnyxBase {
       box: [Math.min(...xs) - pad, Math.min(...ys) - pad,
         Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad]
         .map((v) => Math.round(v)),
-      pts: pts.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ')
+      pts: pts.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' '),
+      // Grundriss: erstes Polygon = Aussenkante, alle weiteren = Räume und
+      // Türöffnungen. Mauern sind, was dazwischen bleibt.
+      walls: walls && walls.length > 1 ? { outer: toPts(walls[0]), holes: walls.slice(1).map(toPts) } : null
     };
   }
 
@@ -6056,6 +6065,14 @@ class OnyxVacuumCard extends OnyxBase {
             <defs><clipPath id="vhaus"><polygon points="${m.map.clip.pts}"/></clipPath></defs>
             <image href="${esc(m.map.url)}" x="0" y="0" width="${m.map.clip.w}" height="${m.map.clip.h}"
                    clip-path="url(#vhaus)"/>
+            ${m.map.clip.walls ? `
+            <mask id="vmauer" maskUnits="userSpaceOnUse" x="${m.map.clip.box[0]}" y="${m.map.clip.box[1]}"
+                  width="${m.map.clip.box[2]}" height="${m.map.clip.box[3]}">
+              <polygon points="${m.map.clip.walls.outer}" fill="#fff"/>
+              ${m.map.clip.walls.holes.map((h) => `<polygon points="${h}" fill="#000"/>`).join('')}
+            </mask>
+            <rect class="wall" x="${m.map.clip.box[0]}" y="${m.map.clip.box[1]}"
+                  width="${m.map.clip.box[2]}" height="${m.map.clip.box[3]}" mask="url(#vmauer)"/>` : ''}
           </svg>`
           : m.map.url
           ? `<img src="${esc(m.map.url)}" alt="${esc(t('vac.map'))}">`
