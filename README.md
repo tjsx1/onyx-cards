@@ -1607,6 +1607,8 @@ image: /local/goat.png                      # Foto im Akkuring
 | `image` | — | Foto im Akkuring, rund auf weissem Grund |
 | `color` | `gruen` | Kartenfarbe; bei einer Störung rot |
 | `battery_entity`, `area_entity`, `progress_entity`, `error_entity` | — | Messwerte für Ring und Zusammenfassung |
+| `areas` | — | Mähbereiche als Chip-Reihe: `true` nimmt die Flächen aus `info.lawn_ids` des Kartensensors, eine Liste `{id, name}` benennt sie. Gewählte Flächen werden auf der Karte blau umrandet, ein Tipp auf eine Fläche in der Karte wählt sie ebenfalls; der Hauptknopf mäht dann nur diese |
+| `area_service` | `ecovacs_goat_g1.mow_area` | Dienst für Bereichsmähen; bekommt `entity_id` und `areas` (`"1,2"`) |
 | `efficiency` | — | `select.` für den Mähmodus; steht als Chip-Reihe immer sichtbar unter der Bedienung |
 | `switches` | — | Schalter-Kacheln im Reiter **Einstellungen** (Tippen schaltet, Halten öffnet das Detailfenster); `sub:` zeigt eine Entität oder zwei mit „–“ darunter, z. B. Start- und Endzeit |
 | `selects` | — | weitere `select.` als Chip-Reihen im Reiter Einstellungen |
@@ -1769,6 +1771,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.22.0** — Rasenmäher-Karte: **Bereichsmähen** — Flächen als Chips (`areas`) oder per Tipp in der Karte wählen, gewählte Flächen blau umrandet, der Hauptknopf mäht nur diese (über `area_service`)
 
 **1.21.0** — Rasenmäher-Karte: Mähmodus als Chip-Reihe (`efficiency`) und drei Reiter — **Einstellungen** (Schalter-Kacheln, Auswahl-Chips, Wertzeilen), **Verschleiss** und **Statistik**. Bekannte GOAT-Werte stehen auf Deutsch (Schnell/Gründlich, Kurzes Gras/Normal/Uneben)
 

@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.21.0';
+const ONYX_VERSION = '1.22.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -356,6 +356,10 @@ const STRINGS = {
     'vac.noMap': 'Karte gerade nicht verfügbar',
     'mow': 'Rasenmäher',
     'mow.mowing': 'mäht',
+    'mow.all': 'Ganzer Garten',
+    'mow.area': 'Fläche {n}',
+    'mow.mowOne': '{n} mähen',
+    'mow.mowMany': '{n} Flächen mähen',
     'mow.settings': 'Einstellungen',
     'mow.wear': 'Verschleiss',
     'mow.stats': 'Statistik',
@@ -933,6 +937,10 @@ const STRINGS = {
     'vac.noMap': 'Map currently unavailable',
     'mow': 'Lawn mower',
     'mow.mowing': 'mowing',
+    'mow.all': 'Whole garden',
+    'mow.area': 'Area {n}',
+    'mow.mowOne': 'Mow {n}',
+    'mow.mowMany': 'Mow {n} areas',
     'mow.settings': 'Settings',
     'mow.wear': 'Wear',
     'mow.stats': 'Statistics',
@@ -6064,13 +6072,16 @@ const MOW_BUSY = ['mowing', 'returning', 'paused', 'error'];
  * Gezeichnet wird hier selbst statt mit einem Bild der Integration, damit
  * die Karte die Farben der Onyx-Karten trägt.
  */
-function mowerMapSvg(a) {
+function mowerMapSvg(a, picked) {
   const pts = (list) => (Array.isArray(list) ? list : [])
     .map((p) => (Array.isArray(p) ? { x: +p[0], y: +p[1] } : { x: +p.x, y: +p.y }))
     .filter((p) => isFinite(p.x) && isFinite(p.y));
   const info = a.info || {};
-  let lawns = (info.lawns || []).map(pts).filter((l) => l.length > 2);
+  const ids = Array.isArray(info.lawn_ids) ? info.lawn_ids.map(String) : [];
+  let lawns = (info.lawns || []).map((l, i) => Object.assign(pts(l), { id: ids[i] || null }))
+    .filter((l) => l.length > 2);
   if (!lawns.length && (info.outline || []).length > 2) lawns = [pts(info.outline)];
+  const pick = new Set((picked || []).map(String));
   const obstacles = (info.obstacles || []).map(pts).filter((o) => o.length > 2);
   const trace = a.trace || {};
   const lanes = (trace.lanes || []).filter((l) => Array.isArray(l) && l.length >= 4)
@@ -6095,7 +6106,7 @@ function mowerMapSvg(a) {
 
   return `
     <svg viewBox="${vx} ${vy} ${vw} ${vh}" class="garden" preserveAspectRatio="xMidYMid meet">
-      ${lawns.map((l) => `<path class="lawn" d="${pth(l, true)}" stroke-width="${(1.4 * k).toFixed(0)}"/>`).join('')}
+      ${lawns.map((l) => `<path class="lawn" d="${pth(l, true)}"${l.id ? ` data-lawn="${esc(l.id)}"` : ''}/>`).join('')}
       ${lanes.length ? `<path class="lanes" stroke-width="110" d="${lanes
         .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('')}"/>` : ''}
       ${edges.map((e) => `<path class="edge" stroke-width="140" d="${pth(e, false)}"/>`).join('')}
@@ -6103,6 +6114,8 @@ function mowerMapSvg(a) {
       ${obstacles.map((o) => `<path class="obst" d="${pth(o, true)}"/>`).join('')}
       ${charge.map((c) => `<circle class="dock" cx="${c.x}" cy="${-c.y}" r="${(5 * k).toFixed(0)}"
         stroke-width="${(1.6 * k).toFixed(0)}"/>`).join('')}
+      ${lawns.filter((l) => l.id && pick.has(l.id)).map((l) => `<path class="pick" d="${pth(l, true)}"
+        stroke-width="${(2.6 * k).toFixed(0)}"/>`).join('')}
       ${pos ? `<g transform="translate(${pos.x} ${-pos.y}) rotate(${isFinite(pos.a) ? pos.a - 90 : 0}) scale(${k.toFixed(2)})">
         <path class="me" d="M13 0L-9 -8L-5 0L-9 8Z" stroke-width="2"/>
       </g>` : ''}
@@ -6134,7 +6147,10 @@ class OnyxMowerCard extends OnyxVacuumCard {
                                    stroke-linecap:butt; stroke-linejoin:round; }
     .garden .trail{ fill:none; stroke:#b9ee98; opacity:.55; stroke-linecap:round;
                     stroke-linejoin:round; }
-    .garden .obst{ fill:#dfe5ec; opacity:.95; }
+    .garden .obst{ fill:#dfe5ec; opacity:.95; pointer-events:none; }
+    .garden .lanes, .garden .edge, .garden .trail{ pointer-events:none; }
+    .garden .pick{ fill:none; stroke:#2196f3; stroke-linejoin:round; pointer-events:none; }
+    .garden [data-lawn]{ cursor:pointer; }
     .garden .dock{ fill:#263847; stroke:#fff; }
     .garden .me{ fill:#2196f3; stroke:#fff; stroke-linejoin:round; }
     /* Abschnitts-Reiter unter der Bedienreihe */
@@ -6212,6 +6228,8 @@ class OnyxMowerCard extends OnyxVacuumCard {
       image: this._config.image || null,
       map: this._mapModel(),
       eff: this._select(this._config.efficiency),
+      areas: this._areas(),
+      picked: this._picked.slice(),
       open: this._open,
       tabs: this._tabs(),
       switches: this._open === 'set' ? this._switches() : [],
@@ -6222,6 +6240,24 @@ class OnyxMowerCard extends OnyxVacuumCard {
       cons: this._open === 'cons' ? this._consumables() : [],
       stats: this._open === 'stats' ? this._rowsOf(this._config.stats) : []
     };
+  }
+
+  /**
+   * Mähbereiche. `areas: true` nimmt die Flächen aus dem Kartensensor
+   * (`info.lawn_ids`); eine Liste `{id, name}` gibt ihnen Namen.
+   */
+  _areas() {
+    const cfg = this._config.areas;
+    if (!cfg) return [];
+    if (Array.isArray(cfg)) {
+      return cfg.map((a) => (typeof a === 'object' ? a : { id: a }))
+        .filter((a) => a.id != null)
+        .map((a) => ({ id: String(a.id), name: a.name || t('mow.area', { n: a.id }) }));
+    }
+    const st = this._config.map ? this._hass.states[this._config.map] : null;
+    const ids = st && st.attributes.info && Array.isArray(st.attributes.info.lawn_ids)
+      ? st.attributes.info.lawn_ids : [];
+    return ids.map((id) => ({ id: String(id), name: t('mow.area', { n: id }) }));
   }
 
   /** Welche Reiter es gibt, hängt daran, was eingerichtet ist */
@@ -6299,7 +6335,7 @@ class OnyxMowerCard extends OnyxVacuumCard {
       return { id, h, svg: null, url: isDead(st) ? null : st.attributes.entity_picture || null };
     }
     let svg = null;
-    try { svg = mowerMapSvg(st.attributes || {}); } catch (e) { svg = null; }
+    try { svg = mowerMapSvg(st.attributes || {}, this._picked); } catch (e) { svg = null; }
     return { id, h, svg, url: null };
   }
 
@@ -6328,6 +6364,11 @@ class OnyxMowerCard extends OnyxVacuumCard {
   _primary(m) {
     if (m.state === 'mowing') return { key: 'pause', icon: 'mdi:pause', text: t('vac.pause') };
     if (m.state === 'paused') return { key: 'start', icon: 'mdi:play', text: t('vac.resume') };
+    if (m.picked.length) {
+      const names = m.areas.filter((a) => m.picked.includes(a.id)).map((a) => a.name);
+      return { key: 'area', icon: 'mdi:play',
+        text: names.length === 1 ? t('mow.mowOne', { n: names[0] }) : t('mow.mowMany', { n: names.length }) };
+    }
     if (m.state === 'returning') return { key: 'start', icon: 'mdi:play', text: t('mow.start') };
     return { key: 'start', icon: 'mdi:play', text: t('mow.start') };
   }
@@ -6370,13 +6411,20 @@ class OnyxMowerCard extends OnyxVacuumCard {
       </div>` : ''}
 
       <div class="ctl">
-        <div class="prim glass ${m.busy && !m.dead ? 'on' : ''}" id="prim">
+        <div class="prim glass ${(m.busy || m.picked.length) && !m.dead ? 'on' : ''}" id="prim">
           <ha-icon icon="${esc(p.icon)}"></ha-icon>${esc(p.text)}</div>
         <div class="gbtn glass ${m.state === 'docked' || !m.can.dock ? 'dim' : ''}" id="home">
           <ha-icon icon="mdi:home-import-outline"></ha-icon></div>
         <div class="gbtn glass ${m.can.stop && m.busy ? '' : 'dim'}" id="stop">
           <ha-icon icon="mdi:stop"></ha-icon></div>
       </div>
+
+      ${m.areas.length && !m.dead ? `
+      <div class="fans">
+        <div class="fan ${m.picked.length ? '' : 'on'}" data-area="">${esc(t('mow.all'))}</div>
+        ${m.areas.map((a) => `
+          <div class="fan ${m.picked.includes(a.id) ? 'on' : ''}" data-area="${esc(a.id)}">${esc(a.name)}</div>`).join('')}
+      </div>` : ''}
 
       ${m.eff && !m.dead ? this._chips(m.eff) : ''}
 
@@ -6456,6 +6504,13 @@ class OnyxMowerCard extends OnyxVacuumCard {
       onTap: () => {
         if (m.dead) return;
         if (p.key === 'pause') return this.call('lawn_mower', 'pause', { entity_id: m.id });
+        if (p.key === 'area') {
+          const [dom, svc] = (this._config.area_service || 'ecovacs_goat_g1.mow_area').split('.');
+          this.call(dom, svc, { entity_id: m.id, areas: this._picked.join(',') });
+          this._picked = [];
+          this._repaint();
+          return;
+        }
         this.call('lawn_mower', 'start_mowing', { entity_id: m.id });
       },
       onHold: () => fireMoreInfo(this, m.id)
@@ -6476,8 +6531,37 @@ class OnyxMowerCard extends OnyxVacuumCard {
         }
       }
     });
+    // Mit Bereichen wählt ein Tipp auf eine Rasenfläche diese aus; sonst
+    // öffnet die Karte wie bisher das Detailfenster.
     const karte = root.getElementById('vmap');
-    if (karte) this._press(karte, { onTap: () => fireMoreInfo(this, m.map.id) });
+    const toggle = (id) => {
+      const i = this._picked.indexOf(id);
+      if (i < 0) this._picked.push(id); else this._picked.splice(i, 1);
+      this._repaint();
+    };
+    if (karte) {
+      // _press fängt den Zeiger ein und meldet nur die Position — welche
+      // Fläche getroffen wurde, merken wir uns darum schon beim Aufsetzen.
+      let hit = null;
+      karte.addEventListener('pointerdown', (ev) => {
+        const el = ev.target && ev.target.closest ? ev.target.closest('[data-lawn]') : null;
+        hit = el ? el.dataset.lawn : null;
+      }, true);
+      this._press(karte, {
+        onTap: () => {
+          if (hit && m.areas.some((a) => a.id === hit)) toggle(hit);
+          else fireMoreInfo(this, m.map.id);
+        }
+      });
+    }
+    root.querySelectorAll('[data-area]').forEach((el) => {
+      this._press(el, {
+        onTap: () => {
+          if (!el.dataset.area) { this._picked = []; this._repaint(); return; }
+          toggle(el.dataset.area);
+        }
+      });
+    });
 
     root.querySelectorAll('[data-tab]').forEach((el) => {
       this._press(el, {
