@@ -1607,6 +1607,12 @@ image: /local/goat.png                      # Foto im Akkuring
 | `image` | — | Foto im Akkuring, rund auf weissem Grund |
 | `color` | `gruen` | Kartenfarbe; bei einer Störung rot |
 | `battery_entity`, `area_entity`, `progress_entity`, `error_entity` | — | Messwerte für Ring und Zusammenfassung |
+| `efficiency` | — | `select.` für den Mähmodus; steht als Chip-Reihe immer sichtbar unter der Bedienung |
+| `switches` | — | Schalter-Kacheln im Reiter **Einstellungen** (Tippen schaltet, Halten öffnet das Detailfenster); `sub:` zeigt eine Entität oder zwei mit „–“ darunter, z. B. Start- und Endzeit |
+| `selects` | — | weitere `select.` als Chip-Reihen im Reiter Einstellungen |
+| `details` | — | Zeilen mit Wert im Reiter Einstellungen (z. B. Regenpause, Schnittrichtung); Tippen öffnet das Detailfenster |
+| `consumables` | — | Reiter **Verschleiss**, wie bei der Saugroboter-Karte |
+| `stats` | — | Zeilen im Reiter **Statistik** |
 
 Einen visuellen Editor hat die Karte noch nicht; sie wird in YAML eingerichtet.
 
@@ -1763,6 +1769,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.21.0** — Rasenmäher-Karte: Mähmodus als Chip-Reihe (`efficiency`) und drei Reiter — **Einstellungen** (Schalter-Kacheln, Auswahl-Chips, Wertzeilen), **Verschleiss** und **Statistik**. Bekannte GOAT-Werte stehen auf Deutsch (Schnell/Gründlich, Kurzes Gras/Normal/Uneben)
 
 **1.20.2** — Rasenmäher-Karte: die Gartenkarte trägt die Farben der GOAT-Karte — heller Grund, grüner Rasen, hell gemähte Bahnen, Fahrspur und blauer Pfeil als Mäher; der Rahmen bleibt im Onyx-Design
 

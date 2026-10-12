@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.20.2';
+const ONYX_VERSION = '1.21.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -356,6 +356,14 @@ const STRINGS = {
     'vac.noMap': 'Karte gerade nicht verfügbar',
     'mow': 'Rasenmäher',
     'mow.mowing': 'mäht',
+    'mow.settings': 'Einstellungen',
+    'mow.wear': 'Verschleiss',
+    'mow.stats': 'Statistik',
+    'mow.o.quick': 'Schnell',
+    'mow.o.delicate': 'Gründlich',
+    'mow.o.short': 'Kurzes Gras',
+    'mow.o.general': 'Normal',
+    'mow.o.bumpy': 'Uneben, hohes Gras',
     'mow.start': 'Mähen',
     'mow.noMap': 'Noch keine Karte — sie kommt, sobald der Mäher fährt',
     'err.needMower': 'Die Entität muss aus der Domäne "lawn_mower" kommen.',
@@ -925,6 +933,14 @@ const STRINGS = {
     'vac.noMap': 'Map currently unavailable',
     'mow': 'Lawn mower',
     'mow.mowing': 'mowing',
+    'mow.settings': 'Settings',
+    'mow.wear': 'Wear',
+    'mow.stats': 'Statistics',
+    'mow.o.quick': 'Quick',
+    'mow.o.delicate': 'Thorough',
+    'mow.o.short': 'Short grass',
+    'mow.o.general': 'Normal',
+    'mow.o.bumpy': 'Bumpy, tall grass',
     'mow.start': 'Mow',
     'mow.noMap': 'No map yet — it arrives once the mower drives',
     'err.needMower': 'The entity must come from the "lawn_mower" domain.',
@@ -6093,6 +6109,17 @@ function mowerMapSvg(a) {
     </svg>`;
 }
 
+/** Bekannte Auswahlwerte der GOAT-Integration in Worte */
+const MOW_OPTION_KEYS = {
+  quick: 'mow.o.quick', delicate: 'mow.o.delicate',
+  'short grass': 'mow.o.short', general: 'mow.o.general',
+  'bumpy ground with tall grass': 'mow.o.bumpy'
+};
+function mowOption(v) {
+  const k = MOW_OPTION_KEYS[String(v).toLowerCase()];
+  return k ? t(k) : String(v);
+}
+
 class OnyxMowerCard extends OnyxVacuumCard {
   static get CSS() {
     return OnyxVacuumCard.CSS + `
@@ -6110,6 +6137,19 @@ class OnyxMowerCard extends OnyxVacuumCard {
     .garden .obst{ fill:#dfe5ec; opacity:.95; }
     .garden .dock{ fill:#263847; stroke:#fff; }
     .garden .me{ fill:#2196f3; stroke:#fff; stroke-linejoin:round; }
+    /* Abschnitts-Reiter unter der Bedienreihe */
+    .tabs{ display:flex; gap:6px; }
+    .tab{ flex:1; height:30px; border-radius:10px; display:flex; align-items:center;
+          justify-content:center; gap:6px; font-size:11.5px; color:#8ea3b5; cursor:pointer;
+          --mdc-icon-size:15px; background:rgba(255,255,255,.04);
+          border:1px solid rgba(255,255,255,.07); transition:background .18s ease; }
+    .tab.on{ color:#fff; font-weight:600;
+             background:color-mix(in srgb, var(--btn) 30%, transparent);
+             border-color:color-mix(in srgb, var(--btn) 55%, transparent); }
+    .tab.held{ opacity:.6; }
+    .rm .sub2{ font-size:9.5px; color:#72879a; line-height:1.2; margin-top:1px; }
+    .rm.on .sub2{ color:#d8e8f4; }
+    .sel{ display:flex; flex-direction:column; gap:6px; }
     /* Das Produktfoto steht auf weissem Studiogrund. Als Hintergrund des
        Kreises statt als <img>: so füllt es den Kreis immer ganz, auch wenn
        der Ring beim Mähen dreht (ein gedrehtes Element beschneidet sein
@@ -6170,8 +6210,78 @@ class OnyxMowerCard extends OnyxVacuumCard {
       },
       robot: null,
       image: this._config.image || null,
-      map: this._mapModel()
+      map: this._mapModel(),
+      eff: this._select(this._config.efficiency),
+      open: this._open,
+      tabs: this._tabs(),
+      switches: this._open === 'set' ? this._switches() : [],
+      selects: this._open === 'set'
+        ? (normList(this._config.selects) || []).map((e) => this._select(e.entity, e.name))
+          .filter(Boolean) : [],
+      details: this._open === 'set' ? this._rowsOf(this._config.details) : [],
+      cons: this._open === 'cons' ? this._consumables() : [],
+      stats: this._open === 'stats' ? this._rowsOf(this._config.stats) : []
     };
+  }
+
+  /** Welche Reiter es gibt, hängt daran, was eingerichtet ist */
+  _tabs() {
+    const has = (k) => (normList(this._config[k]) || []).length > 0;
+    const out = [];
+    if (has('switches') || has('selects') || has('details')) {
+      out.push({ key: 'set', icon: 'mdi:tune-variant', text: t('mow.settings') });
+    }
+    if (has('consumables')) out.push({ key: 'cons', icon: 'mdi:saw-blade', text: t('mow.wear') });
+    if (has('stats')) out.push({ key: 'stats', icon: 'mdi:chart-box-outline', text: t('mow.stats') });
+    return out;
+  }
+
+  _select(id, name) {
+    if (!id) return null;
+    const st = this._hass.states[id];
+    if (!st || isDead(st) || !Array.isArray(st.attributes.options)) return null;
+    return { id, name: name || nameOf(this._hass, id), value: st.state,
+      options: st.attributes.options.map((o) => ({ v: o, text: mowOption(o) })) };
+  }
+
+  _switches() {
+    return (normList(this._config.switches) || []).map((c) => {
+      const st = this._hass.states[c.entity];
+      return {
+        id: c.entity,
+        name: c.name || nameOf(this._hass, c.entity),
+        icon: c.icon || (st && st.attributes.icon) || 'mdi:toggle-switch-outline',
+        on: !!st && st.state === 'on',
+        dead: !st || isDead(st),
+        sub: c.sub ? this._subText(c.sub) : ''
+      };
+    });
+  }
+
+  /** Untertitel einer Kachel: eine Entität (z. B. Uhrzeit) oder zwei mit "–" */
+  _subText(sub) {
+    const ids = Array.isArray(sub) ? sub : [sub];
+    return ids.map((id) => {
+      const st = this._hass.states[id];
+      if (!st || isDead(st)) return '';
+      return /^\d\d:\d\d(:\d\d)?$/.test(st.state) ? st.state.slice(0, 5) : stateText(this._hass, st);
+    }).filter(Boolean).join('–');
+  }
+
+  /** Zeilen mit Wert; Tippen öffnet das Detailfenster */
+  _rowsOf(list) {
+    return (normList(list) || []).map((c) => {
+      const st = this._hass.states[c.entity];
+      const unit = st ? (st.attributes.unit_of_measurement || '') : '';
+      let val = '–';
+      if (st && !isDead(st)) {
+        const n = Number(st.state);
+        val = isNaN(n) ? mowOption(st.state)
+          : `${nfmt(n, c.digits != null ? c.digits : (Math.abs(n) < 10 && n % 1 ? 1 : 0))} ${unit}`.trim();
+      }
+      return { id: c.entity, name: c.name || nameOf(this._hass, c.entity),
+        icon: c.icon || (st && st.attributes.icon) || 'mdi:information-outline', val };
+    });
   }
 
   /**
@@ -6267,7 +6377,72 @@ class OnyxMowerCard extends OnyxVacuumCard {
         <div class="gbtn glass ${m.can.stop && m.busy ? '' : 'dim'}" id="stop">
           <ha-icon icon="mdi:stop"></ha-icon></div>
       </div>
+
+      ${m.eff && !m.dead ? this._chips(m.eff) : ''}
+
+      ${m.tabs.length ? `
+      <div class="tabs">
+        ${m.tabs.map((tb) => `
+          <div class="tab ${m.open === tb.key ? 'on' : ''}" data-tab="${tb.key}">
+            <ha-icon icon="${tb.icon}"></ha-icon>${esc(tb.text)}</div>`).join('')}
+      </div>` : ''}
+
+      ${this._section(m)}
     </ha-card>`;
+  }
+
+  _chips(sel) {
+    return `
+      <div class="fans">
+        ${sel.options.map((o) => `
+          <div class="fan ${o.v === sel.value ? 'on' : ''}" data-sel="${esc(sel.id)}"
+               data-opt="${esc(o.v)}">${esc(o.text)}</div>`).join('')}
+      </div>`;
+  }
+
+  _rows(rows) {
+    return `<div class="rows">${rows.map((r) => `
+      <div class="lrow" data-more="${esc(r.id)}">
+        <div class="lico"><ha-icon icon="${esc(r.icon)}"></ha-icon></div>
+        <div class="lname">${esc(r.name)}</div>
+        <div class="lval">${esc(r.val)}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  _section(m) {
+    if (m.open === 'set') {
+      const cols = Math.min(4, Math.max(2, m.switches.length));
+      return `
+        <div class="divide"></div>
+        ${m.switches.length ? `
+        <div class="rooms" style="grid-template-columns:repeat(${cols},1fr)">
+          ${m.switches.map((w) => `
+            <div class="rm ${w.on ? 'on' : ''}" data-sw="${esc(w.id)}">
+              <div class="box"><ha-icon icon="${esc(w.icon)}"></ha-icon></div>
+              <span>${esc(w.name)}</span>
+              ${w.sub ? `<span class="sub2">${esc(w.sub)}</span>` : ''}
+            </div>`).join('')}
+        </div>` : ''}
+        ${m.selects.map((sel) => `
+          <div class="sel"><div class="grp"><span>${esc(sel.name)}</span></div>
+          ${this._chips(sel)}</div>`).join('')}
+        ${m.details.length ? this._rows(m.details) : ''}`;
+    }
+    if (m.open === 'cons') {
+      return `
+        <div class="divide"></div>
+        <div class="rows">
+          ${m.cons.map((c) => `
+            <div class="lrow ${c.due ? 'due' : ''}" data-more="${esc(c.id)}">
+              <div class="lfill" style="width:${c.pct == null ? 0 : c.pct}%"></div>
+              <div class="lico"><ha-icon icon="${esc(c.icon)}"></ha-icon></div>
+              <div class="lname">${esc(c.name)}</div>
+              <div class="lval">${c.pct == null ? esc(c.raw) : Math.round(c.pct) + ' %'}</div>
+            </div>`).join('')}
+        </div>`;
+    }
+    if (m.open === 'stats') return `<div class="divide"></div>${this._rows(m.stats)}`;
+    return '';
   }
 
   _bind(m) {
@@ -6303,9 +6478,34 @@ class OnyxMowerCard extends OnyxVacuumCard {
     });
     const karte = root.getElementById('vmap');
     if (karte) this._press(karte, { onTap: () => fireMoreInfo(this, m.map.id) });
+
+    root.querySelectorAll('[data-tab]').forEach((el) => {
+      this._press(el, {
+        onTap: () => {
+          this._open = this._open === el.dataset.tab ? null : el.dataset.tab;
+          this._repaint();
+        }
+      });
+    });
+    root.querySelectorAll('[data-sel]').forEach((el) => {
+      this._press(el, {
+        onTap: () => this.call('select', 'select_option',
+          { entity_id: el.dataset.sel, option: el.dataset.opt }),
+        onHold: () => fireMoreInfo(this, el.dataset.sel)
+      });
+    });
+    root.querySelectorAll('[data-sw]').forEach((el) => {
+      this._press(el, {
+        onTap: () => this.call('switch', 'toggle', { entity_id: el.dataset.sw }),
+        onHold: () => fireMoreInfo(this, el.dataset.sw)
+      });
+    });
+    root.querySelectorAll('[data-more]').forEach((el) => {
+      this._press(el, { onTap: () => fireMoreInfo(this, el.dataset.more) });
+    });
   }
 
-  getCardSize() { return 6; }
+  getCardSize() { return this._open ? 9 : 7; }
 }
 
 /* ------------------------------------------------------------------ *
