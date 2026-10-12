@@ -1615,6 +1615,8 @@ image: /local/goat.png                      # Foto im Akkuring
 | `battery_entity`, `area_entity`, `progress_entity`, `error_entity` | — | Messwerte für Ring und Zusammenfassung |
 | `areas` | — | Mähbereiche als Chip-Reihe: `true` nimmt die Flächen aus `info.lawn_ids` des Kartensensors, eine Liste `{id, name}` benennt sie. Gewählte Flächen werden auf der Karte blau umrandet, ein Tipp auf eine Fläche in der Karte wählt sie ebenfalls; der Hauptknopf mäht dann nur diese |
 | `area_service` | `ecovacs_goat_g1.mow_area` | Dienst für Bereichsmähen; bekommt `entity_id` und `areas` (`"1,2"`) |
+| `map_walls` | — | Grundriss des Hauses in **Mäher-Millimetern** (erstes Polygon Aussenkante, weitere Räume/Türen) — wird als Haus zwischen die Rasenflächen gezeichnet |
+| `house_labels` | — | Raumnamen im Haus: Liste `{name, x, y}` in Mäher-Millimetern |
 | `efficiency` | — | `select.` für den Mähmodus; steht als Chip-Reihe immer sichtbar unter der Bedienung |
 | `switches` | — | Schalter-Kacheln im Reiter **Einstellungen** (Tippen schaltet, Halten öffnet das Detailfenster); `sub:` zeigt eine Entität oder zwei mit „–“ darunter, z. B. Start- und Endzeit |
 | `selects` | — | weitere `select.` als Chip-Reihen im Reiter Einstellungen |
@@ -1777,6 +1779,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.29.0** — Rasenmäher-Karte: das **Haus** aus einem Grundriss (`map_walls`, `house_labels`) steht zwischen den Rasenflächen; die Fahrspur setzt bei Sprüngen über 2.5 m ab, statt quer über die Karte zu ziehen
 
 **1.28.0** — Saugroboter-Karte: mit Grundriss öffnet ein Tipp auf die Karte eine **Grossansicht** im selben Look (Vollbild, läuft live mit; Tippen, Esc oder Zurück schliesst). Halten öffnet weiterhin das Detailfenster der Kamera
 

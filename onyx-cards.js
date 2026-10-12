@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.28.0';
+const ONYX_VERSION = '1.29.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -6321,7 +6321,7 @@ const MOW_BUSY = ['mowing', 'returning', 'paused', 'error'];
  * Gezeichnet wird hier selbst statt mit einem Bild der Integration, damit
  * die Karte die Farben der Onyx-Karten trägt.
  */
-function mowerMapSvg(a, picked) {
+function mowerMapSvg(a, picked, house) {
   const pts = (list) => (Array.isArray(list) ? list : [])
     .map((p) => (Array.isArray(p) ? { x: +p[0], y: +p[1] } : { x: +p.x, y: +p.y }))
     .filter((p) => isFinite(p.x) && isFinite(p.y));
@@ -6344,8 +6344,14 @@ function mowerMapSvg(a, picked) {
   const trail = pts(a.position_history).slice(-40);
   if (!lawns.length) return null;
 
-  // Ausschnitt: die Rasenflächen, mit etwas Rand für den Mäherpunkt
-  const all = lawns.flat();
+  // Haus aus einem Grundriss, in Mäher-Millimetern: erstes Polygon die
+  // Aussenkante, weitere Räume und Türöffnungen (wie map_walls beim Saugroboter)
+  const hw = house && Array.isArray(house.walls) && house.walls.length
+    ? house.walls.map(pts).filter((w) => w.length > 2) : [];
+  const hl = house && Array.isArray(house.labels) ? house.labels.filter((l) => l && l.name) : [];
+
+  // Ausschnitt: Rasenflächen und Haus, mit etwas Rand für den Mäherpunkt
+  const all = lawns.flat().concat(hw.length ? hw[0] : []);
   const minX = Math.min(...all.map((p) => p.x)), maxX = Math.max(...all.map((p) => p.x));
   const minY = Math.min(...all.map((p) => p.y)), maxY = Math.max(...all.map((p) => p.y));
   const pad = Math.max(maxX - minX, maxY - minY) * 0.04 + 300;
@@ -6362,13 +6368,28 @@ function mowerMapSvg(a, picked) {
   const laneD = (odd) => lanes.filter((l) => stripe(l) === odd)
     .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('');
 
+  const houseSvg = hw.length ? `
+      <mask id="mhaus" maskUnits="userSpaceOnUse" x="${vx}" y="${vy}" width="${vw}" height="${vh}">
+        <path d="${pth(hw[0], true)}" fill="#fff"/>
+        ${hw.slice(1).map((h) => `<path d="${pth(h, true)}" fill="#000"/>`).join('')}
+      </mask>
+      <path class="house" d="${pth(hw[0], true)}"/>
+      <rect class="hwall" x="${vx}" y="${vy}" width="${vw}" height="${vh}" mask="url(#mhaus)"/>
+      ${hl.map((l) => `<text class="hlab" x="${Math.round(+l.x)}" y="${Math.round(-l.y)}"
+        font-size="${Math.round(vw * 0.022)}">${esc(l.name)}</text>`).join('')}` : '';
+
   return `
     <svg viewBox="${vx} ${vy} ${vw} ${vh}" class="garden" preserveAspectRatio="xMidYMid meet">
+      ${houseSvg}
       ${lawns.map((l) => `<path class="lawn" d="${pth(l, true)}"${l.id ? ` data-lawn="${esc(l.id)}"` : ''}/>`).join('')}
       ${lanes.length ? `<path class="lanes l0" stroke-width="112" d="${laneD(0)}"/>
         <path class="lanes l1" stroke-width="112" d="${laneD(1)}"/>` : ''}
       ${edges.map((e) => `<path class="edge" stroke-width="150" d="${pth(e, false)}"/>`).join('')}
-      ${trail.length > 1 ? `<path class="trail" stroke-width="${(3 * k).toFixed(0)}" d="${pth(trail, false)}"/>` : ''}
+      ${trail.length > 1 ? `<path class="trail" stroke-width="${(3 * k).toFixed(0)}" d="${trail
+        // Sprünge über 2.5 m sind keine Fahrt, sondern fehlende Punkte —
+        // dort setzt die Linie ab, statt quer übers Haus zu ziehen
+        .map((p, i) => `${i && Math.hypot(p.x - trail[i - 1].x, p.y - trail[i - 1].y) < 2500 ? 'L' : 'M'}${Math.round(p.x)} ${Math.round(-p.y)}`)
+        .join('')}"/>` : ''}
       ${obstacles.map((o) => `<path class="obst" d="${pth(o, true)}"/>`).join('')}
       ${charge.map((c) => `<circle class="dock" cx="${c.x}" cy="${-c.y}" r="${(5 * k).toFixed(0)}"
         stroke-width="${(1.6 * k).toFixed(0)}"/>`).join('')}
@@ -6428,6 +6449,11 @@ class OnyxMowerCard extends OnyxVacuumCard {
     .garden [data-lawn]{ cursor:pointer; }
     .garden .dock{ fill:#263847; stroke:#fff; }
     .garden .me-halo{ fill:#2196f3; opacity:.22; }
+    /* Das Haus aus dem Grundriss: hell, Mauern dunkel, Räume beschriftet */
+    .garden .house{ fill:#f6f7f9; pointer-events:none; }
+    .garden .hwall{ fill:#5d6873; pointer-events:none; }
+    .garden .hlab{ fill:#5d6873; font-weight:600; text-anchor:middle; dominant-baseline:middle;
+                   font-family:system-ui, sans-serif; pointer-events:none; }
     .garden .me-dir{ fill:#2196f3; stroke:#fff; stroke-width:1.2; stroke-linejoin:round; }
     .garden .me-body{ fill:#f4f6f8; stroke:#1c2026; stroke-width:1.2; }
     .garden .me-shell{ fill:#1c2026; }
@@ -6605,7 +6631,9 @@ class OnyxMowerCard extends OnyxVacuumCard {
       return { id, h, svg: null, url: isDead(st) ? null : st.attributes.entity_picture || null };
     }
     let svg = null;
-    try { svg = mowerMapSvg(st.attributes || {}, this._picked); } catch (e) { svg = null; }
+    const house = Array.isArray(this._config.map_walls)
+      ? { walls: this._config.map_walls, labels: this._config.house_labels || [] } : null;
+    try { svg = mowerMapSvg(st.attributes || {}, this._picked, house); } catch (e) { svg = null; }
     return { id, h, svg, url: null };
   }
 
