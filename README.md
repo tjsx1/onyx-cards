@@ -1764,6 +1764,8 @@ statt einfach weiß zu bleiben.
 
 ## Änderungen
 
+**1.20.2** — Rasenmäher-Karte: die Gartenkarte trägt die Farben der GOAT-Karte — heller Grund, grüner Rasen, hell gemähte Bahnen, Fahrspur und blauer Pfeil als Mäher; der Rahmen bleibt im Onyx-Design
+
 **1.20.1** — Rasenmäher-Karte: das Foto füllt den Kreis jetzt immer ganz und rund aus (als Hintergrund des Kreises statt als eingesetztes Bild)
 
 **1.20.0** — Neue Karte **`onyx-mower-card`**: Rasenmäher im Aufbau der Saugroboter-Karte, mit Foto im Akkuring und einer selbst gezeichneten Gartenkarte (Rasenflächen, Hindernisse, gemähte Bahnen, Mäherpunkt) aus dem Kartensensor der GOAT-Integration

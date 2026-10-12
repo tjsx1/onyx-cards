@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.20.1';
+const ONYX_VERSION = '1.20.2';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -6063,6 +6063,7 @@ function mowerMapSvg(a) {
   const pos = a.current_position && isFinite(+a.current_position.x)
     ? { x: +a.current_position.x, y: +a.current_position.y, a: +a.current_position.a } : null;
   const charge = pts(a.charge_positions);
+  const trail = pts(a.position_history);
   if (!lawns.length) return null;
 
   // Ausschnitt: die Rasenflächen, mit etwas Rand für den Mäherpunkt
@@ -6082,12 +6083,12 @@ function mowerMapSvg(a) {
       ${lanes.length ? `<path class="lanes" stroke-width="110" d="${lanes
         .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('')}"/>` : ''}
       ${edges.map((e) => `<path class="edge" stroke-width="140" d="${pth(e, false)}"/>`).join('')}
+      ${trail.length > 1 ? `<path class="trail" stroke-width="${(3 * k).toFixed(0)}" d="${pth(trail, false)}"/>` : ''}
       ${obstacles.map((o) => `<path class="obst" d="${pth(o, true)}"/>`).join('')}
       ${charge.map((c) => `<circle class="dock" cx="${c.x}" cy="${-c.y}" r="${(5 * k).toFixed(0)}"
         stroke-width="${(1.6 * k).toFixed(0)}"/>`).join('')}
-      ${pos ? `<g transform="translate(${pos.x} ${-pos.y})${isFinite(pos.a) ? ` rotate(${-pos.a})` : ''}">
-        <circle class="me-halo" r="${(11 * k).toFixed(0)}"/>
-        <circle class="me" r="${(5.5 * k).toFixed(0)}" stroke-width="${(1.8 * k).toFixed(0)}"/>
+      ${pos ? `<g transform="translate(${pos.x} ${-pos.y}) rotate(${isFinite(pos.a) ? pos.a - 90 : 0}) scale(${k.toFixed(2)})">
+        <path class="me" d="M13 0L-9 -8L-5 0L-9 8Z" stroke-width="2"/>
       </g>` : ''}
     </svg>`;
 }
@@ -6095,15 +6096,20 @@ function mowerMapSvg(a) {
 class OnyxMowerCard extends OnyxVacuumCard {
   static get CSS() {
     return OnyxVacuumCard.CSS + `
-    /* Garten: Rasen im Grün der Karte, gemähte Bahnen in der Akzentfarbe */
-    .map svg.garden{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block; }
-    .garden .lawn{ fill:rgba(96,170,104,.20); stroke:rgba(140,205,140,.45); }
-    .garden .lanes, .garden .edge{ fill:none; stroke:var(--acc,#7fcf8a); opacity:.55;
+    /* Garten in den Farben der GOAT-Karte, die Tobi lieber mochte: heller
+       Grund, sattgrüner Rasen, gemähte Bahnen hell, blauer Pfeil. Die Karte
+       ist damit bewusst die eine helle Fläche im dunklen Onyx-Rahmen. */
+    .map:has(svg.garden){ background:#dfe5ec; }
+    .map svg.garden{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block;
+                     background:#dfe5ec; }
+    .garden .lawn{ fill:#4f9a43; opacity:.9; }
+    .garden .lanes, .garden .edge{ fill:none; stroke:#b9ee98; opacity:.55;
                                    stroke-linecap:butt; stroke-linejoin:round; }
-    .garden .obst{ fill:rgba(10,12,15,.75); stroke:rgba(255,255,255,.10); stroke-width:20; }
-    .garden .dock{ fill:#15181d; stroke:#c8d8e6; }
-    .garden .me{ fill:var(--acc,#7fcf8a); stroke:#fff; }
-    .garden .me-halo{ fill:var(--acc,#7fcf8a); opacity:.22; }
+    .garden .trail{ fill:none; stroke:#b9ee98; opacity:.55; stroke-linecap:round;
+                    stroke-linejoin:round; }
+    .garden .obst{ fill:#dfe5ec; opacity:.95; }
+    .garden .dock{ fill:#263847; stroke:#fff; }
+    .garden .me{ fill:#2196f3; stroke:#fff; stroke-linejoin:round; }
     /* Das Produktfoto steht auf weissem Studiogrund. Als Hintergrund des
        Kreises statt als <img>: so füllt es den Kreis immer ganz, auch wenn
        der Ring beim Mähen dreht (ein gedrehtes Element beschneidet sein
