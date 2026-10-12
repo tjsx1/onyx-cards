@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.26.0';
+const ONYX_VERSION = '1.27.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -5617,6 +5617,9 @@ class OnyxVacuumCard extends OnyxBase {
     .map svg.vclip{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block; }
     /* Mauern aus dem Grundriss über der Roboterkarte */
     .map svg.vclip .wall{ fill:#c8d2dc; }
+    .map svg.vclip .rlab{ fill:#1d2733; stroke:rgba(255,255,255,.85); paint-order:stroke;
+                          stroke-linejoin:round; font-weight:600; text-anchor:middle;
+                          dominant-baseline:middle; pointer-events:none; }
     .ring.run > .vico{ animation:onyxspin 3.4s linear infinite reverse; }
 
     .lab{ font-size:11px; line-height:14px; color:#6f8497; }
@@ -5953,9 +5956,45 @@ class OnyxVacuumCard extends OnyxBase {
       pts: pts.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' '),
       // Grundriss: erstes Polygon = Aussenkante, alle weiteren = Räume und
       // Türöffnungen. Mauern sind, was dazwischen bleibt.
-      walls: walls && walls.length > 1 ? { outer: toPts(walls[0]), holes: walls.slice(1).map(toPts) } : null
+      walls: walls && walls.length > 1 ? { outer: toPts(walls[0]), holes: walls.slice(1).map(toPts) } : null,
+      labels: this._config.map_labels === false ? [] : this._mapLabels(st, poly, f),
+      fs: Math.round((Math.max(...xs) - Math.min(...xs)) * 0.032)
     };
   }
+
+  /**
+   * Raumnamen selbst zeichnen: in die Mitte des Raums, aber nur über dem
+   * Teil, der im Haus liegt — die Integration setzt ihr Schild in die Mitte
+   * der ganzen Fläche, also auch der, die der Lidar durchs Glas sieht.
+   */
+  _mapLabels(st, poly, f) {
+    const rooms = st.attributes.rooms;
+    if (!rooms || typeof rooms !== 'object') return [];
+    const hide = (this._config.hide_rooms || []).map(String);
+    const hx = poly.map((p) => +p[0]), hy = poly.map((p) => +p[1]);
+    const [minX, maxX, minY, maxY] = [Math.min(...hx), Math.max(...hx), Math.min(...hy), Math.max(...hy)];
+    const inside = (x, y) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [xi, yi] = poly[i], [xj, yj] = poly[j];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+      }
+      return c;
+    };
+    return Object.values(rooms)
+      .filter((r) => r && r.name && !hide.includes(String(r.room_id)))
+      .map((r) => {
+        const x0 = Math.max(+r.x0, minX), x1 = Math.min(+r.x1, maxX);
+        const y0 = Math.max(+r.y0, minY), y1 = Math.min(+r.y1, maxY);
+        if (!(x1 > x0 && y1 > y0)) return null;
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        if (!inside(cx, cy)) return null;
+        const q = f(cx, cy);
+        return { x: Math.round(q.x), y: Math.round(q.y), name: r.custom_name || r.name };
+      })
+      .filter(Boolean);
+  }
+
 
   /** Zustand in Worte: die Kopfzeile knapp, die Zeile darunter ausführlich */
   _stateWord(m) {
@@ -6073,6 +6112,8 @@ class OnyxVacuumCard extends OnyxBase {
             </mask>
             <rect class="wall" x="${m.map.clip.box[0]}" y="${m.map.clip.box[1]}"
                   width="${m.map.clip.box[2]}" height="${m.map.clip.box[3]}" mask="url(#vmauer)"/>` : ''}
+            ${m.map.clip.labels.map((l) => `<text class="rlab" x="${l.x}" y="${l.y}"
+              font-size="${m.map.clip.fs}" stroke-width="${Math.round(m.map.clip.fs * 0.28)}">${esc(l.name)}</text>`).join('')}
           </svg>`
           : m.map.url
           ? `<img src="${esc(m.map.url)}" alt="${esc(t('vac.map'))}">`

@@ -959,6 +959,7 @@ rooms:
 | `rooms: true` | — | Räume aus dem Gerät lesen (Attribut `rooms`, Dreame) statt sie aufzulisten |
 | `map_clip` | — | Umriss des Hauses als Liste `[x, y]` in Roboter-Millimetern (z. B. aus einem Grundriss). Die Karte zeigt nur, was innerhalb liegt, und zoomt auf das Haus — Flächen, die der Lidar durchs Glas sieht, verschwinden. Umgerechnet wird über die `calibration_points` der Dreame-Karte, der Ausschnitt bleibt also stimmig, wenn die Karte wächst |
 | `map_walls` | — | Grundriss in Roboter-Millimetern: erstes Polygon = Aussenkante des Hauses, alle weiteren = Räume und Türöffnungen. Die Karte wird auf die Aussenkante zugeschnitten (ersetzt `map_clip`), und die Mauern dazwischen werden über die Roboterkarte gezeichnet |
+| `map_labels` | `true` | Mit `map_walls`/`map_clip`: Raumnamen selbst in die Räume zeichnen (Mitte des Raums innerhalb des Hauses). Dazu in der Dreame-Integration unter *Ausgeblendete Kartenobjekte* `name`, `name_background`, `icon` und `order` ausblenden |
 | `hide_rooms` | — | Raum-IDs, die bei `rooms: true` nicht erscheinen sollen, z. B. `[8]` |
 | `consumables` | — | Sensoren für Filter, Bürsten, Wischtuch |
 | `show_fan_speed` | `true` | Blendet die Stufenreihe aus |
@@ -1776,6 +1777,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.27.0** — Saugroboter-Karte: mit Grundriss zeichnet die Karte die **Raumnamen selbst**, mittig in den Teil des Raums, der im Haus liegt (`map_labels`)
 
 **1.26.0** — Saugroboter-Karte: **`map_walls`** zeichnet die Mauern eines Grundrisses über die Roboterkarte und schneidet sie auf die Aussenkante zu
 
