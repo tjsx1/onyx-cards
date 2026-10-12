@@ -1772,6 +1772,8 @@ statt einfach weiß zu bleiben.
 
 ## Änderungen
 
+**1.23.0** — Rasenmäher-Karte: gemähte Bahnen als **dunkle Mähstreifen** (abwechselnd, nach Bahnnummer) auf dem grünen Rasen, die Fahrspur nur noch als kurzes weisses Stück, und der Mäher als **Bild von oben** mit blauer Spitze. Die Drehrichtung war bisher falsch (90° versetzt und gespiegelt) — der Kurs `a` zählt gegen den Uhrzeigersinn, im SVG also `rotate(-a)`
+
 **1.22.0** — Rasenmäher-Karte: **Bereichsmähen** — Flächen als Chips (`areas`) oder per Tipp in der Karte wählen, gewählte Flächen blau umrandet, der Hauptknopf mäht nur diese (über `area_service`)
 
 **1.21.0** — Rasenmäher-Karte: Mähmodus als Chip-Reihe (`efficiency`) und drei Reiter — **Einstellungen** (Schalter-Kacheln, Auswahl-Chips, Wertzeilen), **Verschleiss** und **Statistik**. Bekannte GOAT-Werte stehen auf Deutsch (Schnell/Gründlich, Kurzes Gras/Normal/Uneben)

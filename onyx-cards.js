@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.22.0';
+const ONYX_VERSION = '1.23.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -6085,12 +6085,14 @@ function mowerMapSvg(a, picked) {
   const obstacles = (info.obstacles || []).map(pts).filter((o) => o.length > 2);
   const trace = a.trace || {};
   const lanes = (trace.lanes || []).filter((l) => Array.isArray(l) && l.length >= 4)
-    .map((l) => l.map(Number)).filter((l) => l.every(isFinite));
+    .map((l) => l.map(Number)).filter((l) => l.slice(0, 4).every(isFinite));
   const edges = (trace.edges || []).map(pts).filter((e) => e.length > 1);
   const pos = a.current_position && isFinite(+a.current_position.x)
     ? { x: +a.current_position.x, y: +a.current_position.y, a: +a.current_position.a } : null;
   const charge = pts(a.charge_positions);
-  const trail = pts(a.position_history);
+  // Nur das letzte Stück der Fahrspur: wo gemäht ist, zeigen die Bahnen —
+  // die ganze Spur würde sie übermalen.
+  const trail = pts(a.position_history).slice(-40);
   if (!lawns.length) return null;
 
   // Ausschnitt: die Rasenflächen, mit etwas Rand für den Mäherpunkt
@@ -6104,20 +6106,28 @@ function mowerMapSvg(a, picked) {
     .join('') + (zu ? 'Z' : '');
   const k = vw / 360; // Millimeter pro Bildschirmpunkt bei voller Kartenbreite
 
+  // Gemähte Bahnen abwechselnd hell und dunkel wie Mähstreifen. Die
+  // Bahnnummer kommt als fünfter Wert; ohne sie entscheidet die Lage.
+  const stripe = (l) => (isFinite(l[4]) ? l[4]
+    : Math.round((Math.abs(l[0] - l[2]) < Math.abs(l[1] - l[3]) ? l[0] : l[1]) / 100)) % 2;
+  const laneD = (odd) => lanes.filter((l) => stripe(l) === odd)
+    .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('');
+
   return `
     <svg viewBox="${vx} ${vy} ${vw} ${vh}" class="garden" preserveAspectRatio="xMidYMid meet">
       ${lawns.map((l) => `<path class="lawn" d="${pth(l, true)}"${l.id ? ` data-lawn="${esc(l.id)}"` : ''}/>`).join('')}
-      ${lanes.length ? `<path class="lanes" stroke-width="110" d="${lanes
-        .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('')}"/>` : ''}
-      ${edges.map((e) => `<path class="edge" stroke-width="140" d="${pth(e, false)}"/>`).join('')}
+      ${lanes.length ? `<path class="lanes l0" stroke-width="112" d="${laneD(0)}"/>
+        <path class="lanes l1" stroke-width="112" d="${laneD(1)}"/>` : ''}
+      ${edges.map((e) => `<path class="edge" stroke-width="150" d="${pth(e, false)}"/>`).join('')}
       ${trail.length > 1 ? `<path class="trail" stroke-width="${(3 * k).toFixed(0)}" d="${pth(trail, false)}"/>` : ''}
       ${obstacles.map((o) => `<path class="obst" d="${pth(o, true)}"/>`).join('')}
       ${charge.map((c) => `<circle class="dock" cx="${c.x}" cy="${-c.y}" r="${(5 * k).toFixed(0)}"
         stroke-width="${(1.6 * k).toFixed(0)}"/>`).join('')}
       ${lawns.filter((l) => l.id && pick.has(l.id)).map((l) => `<path class="pick" d="${pth(l, true)}"
         stroke-width="${(2.6 * k).toFixed(0)}"/>`).join('')}
-      ${pos ? `<g transform="translate(${pos.x} ${-pos.y}) rotate(${isFinite(pos.a) ? pos.a - 90 : 0}) scale(${k.toFixed(2)})">
-        <path class="me" d="M13 0L-9 -8L-5 0L-9 8Z" stroke-width="2"/>
+      ${pos ? `<g transform="translate(${pos.x} ${-pos.y}) scale(${k.toFixed(2)})">
+        <circle class="me-halo" r="15"/>
+        <g transform="rotate(${isFinite(pos.a) ? -pos.a : 0})">${MOWER_TOP_SVG}</g>
       </g>` : ''}
     </svg>`;
 }
@@ -6133,6 +6143,19 @@ function mowOption(v) {
   return k ? t(k) : String(v);
 }
 
+/**
+ * Der Mäher von oben, Front nach rechts (+x): weisses Gehäuse, dunkle Haube
+ * mit roter Stopptaste, Lidar-Kuppel vorn und ein blauer Keil als
+ * Fahrtrichtung. Die Integration liefert den Kurs `a` in Grad gegen den
+ * Uhrzeigersinn ab +x — im SVG mit y nach unten heisst das rotate(-a).
+ */
+const MOWER_TOP_SVG = `
+  <path class="me-dir" d="M17 0L11 -4.6L11 4.6Z"/>
+  <rect class="me-body" x="-10.5" y="-8" width="21" height="16" rx="4.5"/>
+  <rect class="me-shell" x="-7.5" y="-5.6" width="13" height="11.2" rx="2.6"/>
+  <rect class="me-btn" x="-3.6" y="-1.7" width="4" height="3.4" rx="1"/>
+  <circle class="me-lidar" cx="7.4" cy="0" r="2.3"/>`;
+
 class OnyxMowerCard extends OnyxVacuumCard {
   static get CSS() {
     return OnyxVacuumCard.CSS + `
@@ -6142,17 +6165,25 @@ class OnyxMowerCard extends OnyxVacuumCard {
     .map:has(svg.garden){ background:#dfe5ec; }
     .map svg.garden{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block;
                      background:#dfe5ec; }
-    .garden .lawn{ fill:#4f9a43; opacity:.9; }
-    .garden .lanes, .garden .edge{ fill:none; stroke:#b9ee98; opacity:.55;
-                                   stroke-linecap:butt; stroke-linejoin:round; }
-    .garden .trail{ fill:none; stroke:#b9ee98; opacity:.55; stroke-linecap:round;
+    /* Ungemäht: das Grün des Rasens, flach. Gemäht: dunklere Streifen,
+       abwechselnd wie frisch gemäht — so liest man auf einen Blick, was fertig ist. */
+    .garden .lawn{ fill:#4f9a43; }
+    .garden .lanes, .garden .edge{ fill:none; stroke-linecap:butt; stroke-linejoin:round; }
+    .garden .lanes.l0, .garden .edge{ stroke:#2d6e28; }
+    .garden .lanes.l1{ stroke:#245f20; }
+    .garden .trail{ fill:none; stroke:#fff; opacity:.6; stroke-linecap:round;
                     stroke-linejoin:round; }
     .garden .obst{ fill:#dfe5ec; opacity:.95; pointer-events:none; }
     .garden .lanes, .garden .edge, .garden .trail{ pointer-events:none; }
     .garden .pick{ fill:none; stroke:#2196f3; stroke-linejoin:round; pointer-events:none; }
     .garden [data-lawn]{ cursor:pointer; }
     .garden .dock{ fill:#263847; stroke:#fff; }
-    .garden .me{ fill:#2196f3; stroke:#fff; stroke-linejoin:round; }
+    .garden .me-halo{ fill:#2196f3; opacity:.22; }
+    .garden .me-dir{ fill:#2196f3; stroke:#fff; stroke-width:1.2; stroke-linejoin:round; }
+    .garden .me-body{ fill:#f4f6f8; stroke:#1c2026; stroke-width:1.2; }
+    .garden .me-shell{ fill:#1c2026; }
+    .garden .me-btn{ fill:#e53935; }
+    .garden .me-lidar{ fill:#30363f; stroke:#8a96a3; stroke-width:.8; }
     /* Abschnitts-Reiter unter der Bedienreihe */
     .tabs{ display:flex; gap:6px; }
     .tab{ flex:1; height:30px; border-radius:10px; display:flex; align-items:center;
