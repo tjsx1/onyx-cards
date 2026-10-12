@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.23.0';
+const ONYX_VERSION = '1.24.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -5657,6 +5657,16 @@ class OnyxVacuumCard extends OnyxBase {
     ha-card.warm .grp{ color:var(--lab); }
     .grp b{ font-weight:600; color:var(--acc); }
 
+    /* Abschnitts-Reiter unter der Bedienreihe */
+    .tabs{ display:flex; gap:6px; }
+    .tab{ flex:1; height:30px; border-radius:10px; display:flex; align-items:center;
+          justify-content:center; gap:6px; font-size:11.5px; color:#8ea3b5; cursor:pointer;
+          --mdc-icon-size:15px; background:rgba(255,255,255,.04);
+          border:1px solid rgba(255,255,255,.07); transition:background .18s ease; }
+    .tab.on{ color:#fff; font-weight:600;
+             background:color-mix(in srgb, var(--btn) 30%, transparent);
+             border-color:color-mix(in srgb, var(--btn) 55%, transparent); }
+    .tab.held{ opacity:.6; }
     /* Räume: dieselben Kacheln wie die Schnellzugriffe */
     .rooms{ display:grid; gap:10px; }
     .rm{ text-align:center; cursor:pointer; }
@@ -5736,9 +5746,46 @@ class OnyxVacuumCard extends OnyxBase {
   }
 
   _rooms() {
-    return (this._config.rooms || [])
+    const cfg = this._config.rooms;
+    // `rooms: true` liest die Räume aus dem Gerät — die Dreame-Integration
+    // führt sie im Attribut `rooms`, je Karte eine Liste {id, name, icon}.
+    if (cfg === true || cfg === 'auto') {
+      const st = this._hass.states[this._config.entity];
+      const all = st && st.attributes.rooms;
+      if (!all || typeof all !== 'object') return [];
+      const list = Array.isArray(all) ? all
+        : all[st.attributes.selected_map] || Object.values(all)[0] || [];
+      return (Array.isArray(list) ? list : [])
+        .filter((r) => r && r.id != null)
+        .map((r) => ({ id: String(r.id), name: r.name || String(r.id), icon: r.icon || null }));
+    }
+    return (cfg || [])
       .map((r) => (typeof r === 'string' ? { name: r, id: r } : Object.assign({}, r)))
       .filter((r) => r.id != null && r.id !== '');
+  }
+
+  /**
+   * Räume saugen. Mit `room_service` (oder automatisch bei der
+   * Dreame-Integration) über deren Dienst mit `segments`, sonst wie bisher
+   * per `send_command` (Xiaomi: app_segment_clean).
+   */
+  _cleanRooms(ids) {
+    const segs = ids.map((x) => (isNaN(Number(x)) ? x : Number(x)));
+    let svc = this._config.room_service;
+    if (!svc && !this._config.room_command && this._hass.services
+        && this._hass.services.dreame_vacuum && this._hass.services.dreame_vacuum.vacuum_clean_segment) {
+      svc = 'dreame_vacuum.vacuum_clean_segment';
+    }
+    if (svc) {
+      const [dom, name] = svc.split('.');
+      this.call(dom, name, { entity_id: this._config.entity, segments: segs });
+      return;
+    }
+    this.call('vacuum', 'send_command', {
+      entity_id: this._config.entity,
+      command: this._config.room_command || 'app_segment_clean',
+      params: segs
+    });
   }
 
   /** Verbrauchsteile in Prozent. Manche Sensoren melden Prozent, andere Stunden. */
@@ -5959,6 +6006,14 @@ class OnyxVacuumCard extends OnyxBase {
           <div class="fan ${f === m.fan ? 'on' : ''}" data-fan="${esc(f)}">${esc(f)}</div>`).join('')}
       </div>` : ''}
 
+      ${m.hasRooms || m.hasCons ? `
+      <div class="tabs">
+        ${m.hasRooms ? `<div class="tab ${m.open === 'rooms' ? 'on' : ''}" data-vtab="rooms">
+          <ha-icon icon="mdi:floor-plan"></ha-icon>${esc(t('vac.rooms'))}${m.picked ? ` · ${m.picked}` : ''}</div>` : ''}
+        ${m.hasCons ? `<div class="tab ${m.open === 'cons' ? 'on' : ''}" data-vtab="cons">
+          <ha-icon icon="mdi:air-filter"></ha-icon>${esc(t('vac.consumables'))}</div>` : ''}
+      </div>` : ''}
+
       ${sections.join('')}
     </ha-card>`;
   }
@@ -5988,11 +6043,7 @@ class OnyxVacuumCard extends OnyxBase {
         if (p.key === 'pause') return this.call('vacuum', 'pause', { entity_id: m.id });
         if (p.key === 'stop') return this.call('vacuum', 'stop', { entity_id: m.id });
         if (p.key === 'segments') {
-          this.call('vacuum', 'send_command', {
-            entity_id: m.id,
-            command: this._config.room_command || 'app_segment_clean',
-            params: this._picked.map((x) => (isNaN(Number(x)) ? x : Number(x)))
-          });
+          this._cleanRooms(this._picked);
           this._picked = [];
           this._repaint();
           return;
@@ -6014,6 +6065,15 @@ class OnyxVacuumCard extends OnyxBase {
       }
     });
 
+    root.querySelectorAll('[data-vtab]').forEach((el) => {
+      this._press(el, {
+        onTap: () => {
+          this._open = this._open === el.dataset.vtab ? null : el.dataset.vtab;
+          this._repaint();
+        }
+      });
+    });
+
     root.querySelectorAll('[data-fan]').forEach((el) => {
       this._press(el, {
         onTap: () => this.call('vacuum', 'set_fan_speed',
@@ -6031,11 +6091,7 @@ class OnyxVacuumCard extends OnyxBase {
         },
         // Halten saugt sofort nur diesen einen Raum
         onHold: () => {
-          this.call('vacuum', 'send_command', {
-            entity_id: m.id,
-            command: this._config.room_command || 'app_segment_clean',
-            params: [isNaN(Number(id)) ? id : Number(id)]
-          });
+          this._cleanRooms([id]);
           this._picked = [];
           this._repaint();
         }
@@ -6184,16 +6240,6 @@ class OnyxMowerCard extends OnyxVacuumCard {
     .garden .me-shell{ fill:#1c2026; }
     .garden .me-btn{ fill:#e53935; }
     .garden .me-lidar{ fill:#30363f; stroke:#8a96a3; stroke-width:.8; }
-    /* Abschnitts-Reiter unter der Bedienreihe */
-    .tabs{ display:flex; gap:6px; }
-    .tab{ flex:1; height:30px; border-radius:10px; display:flex; align-items:center;
-          justify-content:center; gap:6px; font-size:11.5px; color:#8ea3b5; cursor:pointer;
-          --mdc-icon-size:15px; background:rgba(255,255,255,.04);
-          border:1px solid rgba(255,255,255,.07); transition:background .18s ease; }
-    .tab.on{ color:#fff; font-weight:600;
-             background:color-mix(in srgb, var(--btn) 30%, transparent);
-             border-color:color-mix(in srgb, var(--btn) 55%, transparent); }
-    .tab.held{ opacity:.6; }
     .rm .sub2{ font-size:9.5px; color:#72879a; line-height:1.2; margin-top:1px; }
     .rm.on .sub2{ color:#d8e8f4; }
     .sel{ display:flex; flex-direction:column; gap:6px; }

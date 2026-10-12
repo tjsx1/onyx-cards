@@ -955,6 +955,8 @@ rooms:
 | `battery_entity` | wird gesucht | Eigener Akku-Sensor, falls die Entität keinen `battery_level` hat |
 | `rooms` | — | Liste aus `{name, id, icon}`. `id` ist die Segment-Nummer des Herstellers |
 | `room_command` | `app_segment_clean` | Der Befehl, den `vacuum.send_command` bekommt |
+| `room_service` | automatisch | Dienst für Raumreinigung, bekommt `entity_id` + `segments`. Ist die Dreame-Integration da und kein `room_command` gesetzt, nimmt die Karte `dreame_vacuum.vacuum_clean_segment` |
+| `rooms: true` | — | Räume aus dem Gerät lesen (Attribut `rooms`, Dreame) statt sie aufzulisten |
 | `consumables` | — | Sensoren für Filter, Bürsten, Wischtuch |
 | `show_fan_speed` | `true` | Blendet die Stufenreihe aus |
 | `map` | — | Kamera- oder Bild-Entität mit der Karte der Wohnung, z. B. `camera.x50_master_map` (Dreame) |
@@ -1771,6 +1773,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.24.0** — Saugroboter-Karte: **Räume aus dem Gerät** mit `rooms: true` (Dreame-Integration: Attribut `rooms` der gewählten Karte), Raumreinigung über **`room_service`** — bei der Dreame-Integration automatisch `dreame_vacuum.vacuum_clean_segment` mit `segments` —, und sichtbare Reiter **Räume · Verbrauchsteile** unter der Bedienung (vorher nur durch Tippen auf den Kopf erreichbar). Die Reiter teilt sich die Rasenmäher-Karte
 
 **1.23.0** — Rasenmäher-Karte: gemähte Bahnen als **dunkle Mähstreifen** (abwechselnd, nach Bahnnummer) auf dem grünen Rasen, die Fahrspur nur noch als kurzes weisses Stück, und der Mäher als **Bild von oben** mit blauer Spitze. Die Drehrichtung war bisher falsch (90° versetzt und gespiegelt) — der Kurs `a` zählt gegen den Uhrzeigersinn, im SVG also `rotate(-a)`
 
