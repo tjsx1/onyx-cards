@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.24.1';
+const ONYX_VERSION = '1.25.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -5541,6 +5541,25 @@ function vacRobotSvg(farbe) {
     </svg>`;
 }
 
+/**
+ * Affine Abbildung Roboter-Millimeter → Bildpunkte aus den drei
+ * `calibration_points` der Dreame-Karte ({vacuum:{x,y}, map:{x,y}}).
+ */
+function vacCalib(points) {
+  if (!Array.isArray(points) || points.length < 3) return null;
+  const [p0, p1, p2] = points.map((p) => ({ vx: +p.vacuum.x, vy: +p.vacuum.y, mx: +p.map.x, my: +p.map.y }));
+  const dx1 = p1.vx - p0.vx, dy1 = p1.vy - p0.vy, dx2 = p2.vx - p0.vx, dy2 = p2.vy - p0.vy;
+  const det = dx1 * dy2 - dx2 * dy1;
+  if (!det) return null;
+  const solve = (a1, a2) => [(a1 * dy2 - a2 * dy1) / det, (dx1 * a2 - dx2 * a1) / det];
+  const [axx, axy] = solve(p1.mx - p0.mx, p2.mx - p0.mx);
+  const [ayx, ayy] = solve(p1.my - p0.my, p2.my - p0.my);
+  return (x, y) => ({
+    x: p0.mx + axx * (x - p0.vx) + axy * (y - p0.vy),
+    y: p0.my + ayx * (x - p0.vx) + ayy * (y - p0.vy)
+  });
+}
+
 class OnyxVacuumCard extends OnyxBase {
   static get CSS() {
     return PAL_CSS + `
@@ -5595,6 +5614,7 @@ class OnyxVacuumCard extends OnyxBase {
                  padding:22px 12px; font-size:12px; color:#72879a; --mdc-icon-size:26px;
                  text-align:center; }
     .map.held{ transform:scale(.99); }
+    .map svg.vclip{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block; }
     .ring.run > .vico{ animation:onyxspin 3.4s linear infinite reverse; }
 
     .lab{ font-size:11px; line-height:14px; color:#6f8497; }
@@ -5883,7 +5903,49 @@ class OnyxVacuumCard extends OnyxBase {
     if (!id) return null;
     const st = this._hass.states[id];
     const url = st && !isDead(st) ? st.attributes.entity_picture : null;
-    return { id, url: url || null, h: Number(this._config.map_height) || null };
+    return { id, url: url || null, h: Number(this._config.map_height) || null,
+      clip: url ? this._mapClip(st, url) : null };
+  }
+
+  /**
+   * `map_clip`: Umriss des Hauses in Roboter-Millimetern (z. B. aus einem
+   * Grundriss). Die Karte zeigt dann nur, was innerhalb liegt, und zoomt
+   * auf das Haus — Flächen, die der Lidar durchs Glas sieht, fallen weg.
+   * Weil die Ecken über die Kalibrierpunkte umgerechnet werden, bleibt der
+   * Ausschnitt richtig, auch wenn die Karte wächst.
+   */
+  _mapClip(st, url) {
+    const poly = this._config.map_clip;
+    if (!Array.isArray(poly) || poly.length < 3) return null;
+    const f = vacCalib(st.attributes.calibration_points);
+    if (!f) return null;
+    const nat = (this._mapNat || {})[url.split('?')[0]];
+    if (!nat) {
+      // Bildgrösse einmal nachladen, dann neu zeichnen
+      this._mapNat = this._mapNat || {};
+      if (!this._mapNatLoading) {
+        this._mapNatLoading = true;
+        const img = new Image();
+        img.onload = () => {
+          this._mapNat[url.split('?')[0]] = { w: img.naturalWidth, h: img.naturalHeight };
+          this._mapNatLoading = false;
+          this._repaint();
+        };
+        img.onerror = () => { this._mapNatLoading = false; };
+        img.src = url;
+      }
+      return null;
+    }
+    const pts = poly.map((p) => f(+p[0], +p[1]));
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const pad = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * 0.03;
+    return {
+      w: nat.w, h: nat.h,
+      box: [Math.min(...xs) - pad, Math.min(...ys) - pad,
+        Math.max(...xs) - Math.min(...xs) + 2 * pad, Math.max(...ys) - Math.min(...ys) + 2 * pad]
+        .map((v) => Math.round(v)),
+      pts: pts.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ')
+    };
   }
 
   /** Zustand in Worte: die Kopfzeile knapp, die Zeile darunter ausführlich */
@@ -5989,7 +6051,13 @@ class OnyxVacuumCard extends OnyxBase {
 
       ${m.map ? `
       <div class="map" id="vmap"${m.map.h ? ` style="--map-h:${m.map.h}px"` : ''}>
-        ${m.map.url
+        ${m.map.url && m.map.clip ? `
+          <svg class="vclip" viewBox="${m.map.clip.box.join(' ')}" role="img" aria-label="${esc(t('vac.map'))}">
+            <defs><clipPath id="vhaus"><polygon points="${m.map.clip.pts}"/></clipPath></defs>
+            <image href="${esc(m.map.url)}" x="0" y="0" width="${m.map.clip.w}" height="${m.map.clip.h}"
+                   clip-path="url(#vhaus)"/>
+          </svg>`
+          : m.map.url
           ? `<img src="${esc(m.map.url)}" alt="${esc(t('vac.map'))}">`
           : `<div class="nomap"><ha-icon icon="mdi:map-outline"></ha-icon>${esc(t('vac.noMap'))}</div>`}
       </div>` : ''}

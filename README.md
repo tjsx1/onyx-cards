@@ -957,6 +957,7 @@ rooms:
 | `room_command` | `app_segment_clean` | Der Befehl, den `vacuum.send_command` bekommt |
 | `room_service` | automatisch | Dienst für Raumreinigung, bekommt `entity_id` + `segments`. Ist die Dreame-Integration da und kein `room_command` gesetzt, nimmt die Karte `dreame_vacuum.vacuum_clean_segment` |
 | `rooms: true` | — | Räume aus dem Gerät lesen (Attribut `rooms`, Dreame) statt sie aufzulisten |
+| `map_clip` | — | Umriss des Hauses als Liste `[x, y]` in Roboter-Millimetern (z. B. aus einem Grundriss). Die Karte zeigt nur, was innerhalb liegt, und zoomt auf das Haus — Flächen, die der Lidar durchs Glas sieht, verschwinden. Umgerechnet wird über die `calibration_points` der Dreame-Karte, der Ausschnitt bleibt also stimmig, wenn die Karte wächst |
 | `hide_rooms` | — | Raum-IDs, die bei `rooms: true` nicht erscheinen sollen, z. B. `[8]` |
 | `consumables` | — | Sensoren für Filter, Bürsten, Wischtuch |
 | `show_fan_speed` | `true` | Blendet die Stufenreihe aus |
@@ -1774,6 +1775,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.25.0** — Saugroboter-Karte: **`map_clip`** schneidet die Karte auf den Umriss des Hauses zu (Roboter-Millimeter, über die Kalibrierpunkte der Dreame-Karte umgerechnet) und zoomt darauf
 
 **1.24.1** — Saugroboter-Karte: `hide_rooms` blendet Räume aus, die das Gerät meldet, die es aber nicht gibt
 
