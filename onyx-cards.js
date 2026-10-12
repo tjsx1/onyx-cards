@@ -10,6 +10,7 @@
  *   custom:onyx-actions-card – Schnellzugriffe für Szenen, Skripte, Automationen
  *   custom:onyx-chart-card   – bis zu drei Messwerte, einer davon als Verlauf
  *   custom:onyx-vacuum-card  – Saugroboter mit Akkuring, Räumen, Verbrauchsteilen
+ *   custom:onyx-mower-card   – Rasenmäher mit Foto, Gartenkarte und gemähten Bahnen
  *   custom:onyx-weather-card – Wetter mit gezeichneter Szene und Vorhersage
  *   custom:onyx-light-card   – Licht als eine Zeile, ausklappbar
  *   custom:onyx-camera-card  – Kamera mit Livebild, Bewegung und Türöffner
@@ -26,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.19.0';
+const ONYX_VERSION = '1.20.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -353,6 +354,13 @@ const STRINGS = {
     'vac.area': '{n} m²',
     'vac.map': 'Karte',
     'vac.noMap': 'Karte gerade nicht verfügbar',
+    'mow': 'Rasenmäher',
+    'mow.mowing': 'mäht',
+    'mow.start': 'Mähen',
+    'mow.noMap': 'Noch keine Karte — sie kommt, sobald der Mäher fährt',
+    'err.needMower': 'Die Entität muss aus der Domäne "lawn_mower" kommen.',
+    'card.mower': 'Onyx Rasenmäher-Karte',
+    'card.mower.d': 'Rasenmäher mit Akkuring, Foto, Gartenkarte und gemähten Bahnen.',
     'err.needVacuum': 'Die Entität muss aus der Domäne "vacuum" kommen.',
     'card.vacuum': 'Onyx Saugroboter-Karte',
     'card.vacuum.d': 'Akkuring, Räume und Verbrauchsteile',
@@ -915,6 +923,13 @@ const STRINGS = {
     'vac.area': '{n} m²',
     'vac.map': 'Map',
     'vac.noMap': 'Map currently unavailable',
+    'mow': 'Lawn mower',
+    'mow.mowing': 'mowing',
+    'mow.start': 'Mow',
+    'mow.noMap': 'No map yet — it arrives once the mower drives',
+    'err.needMower': 'The entity must come from the "lawn_mower" domain.',
+    'card.mower': 'Onyx Lawn Mower Card',
+    'card.mower.d': 'Lawn mower with battery ring, photo, garden map and mowed lanes.',
     'err.needVacuum': 'The entity must come from the "vacuum" domain.',
     'card.vacuum': 'Onyx Vacuum Card',
     'card.vacuum.d': 'Battery ring, rooms and consumables',
@@ -6014,6 +6029,272 @@ class OnyxVacuumCard extends OnyxBase {
   getCardSize() {
     return this._open ? 5 : 3;
   }
+}
+
+/* ================================================================== *
+ * 7b) RASENMÄHER-KARTE
+ * ================================================================== */
+
+/** Bits aus supported_features des lawn_mower */
+const MF_MOW = { START: 1, PAUSE: 2, DOCK: 4 };
+
+/** Zustände, in denen der Mäher unterwegs ist */
+const MOW_BUSY = ['mowing', 'returning', 'paused', 'error'];
+
+/**
+ * Der Garten als Zeichnung. Kommt aus einem Kartensensor, wie ihn die
+ * GOAT-Integration führt (`info.lawns`/`outline`, `info.obstacles`,
+ * `trace.lanes`, `current_position`), in Millimetern mit y nach oben.
+ * Gezeichnet wird hier selbst statt mit einem Bild der Integration, damit
+ * die Karte die Farben der Onyx-Karten trägt.
+ */
+function mowerMapSvg(a) {
+  const pts = (list) => (Array.isArray(list) ? list : [])
+    .map((p) => (Array.isArray(p) ? { x: +p[0], y: +p[1] } : { x: +p.x, y: +p.y }))
+    .filter((p) => isFinite(p.x) && isFinite(p.y));
+  const info = a.info || {};
+  let lawns = (info.lawns || []).map(pts).filter((l) => l.length > 2);
+  if (!lawns.length && (info.outline || []).length > 2) lawns = [pts(info.outline)];
+  const obstacles = (info.obstacles || []).map(pts).filter((o) => o.length > 2);
+  const trace = a.trace || {};
+  const lanes = (trace.lanes || []).filter((l) => Array.isArray(l) && l.length >= 4)
+    .map((l) => l.map(Number)).filter((l) => l.every(isFinite));
+  const edges = (trace.edges || []).map(pts).filter((e) => e.length > 1);
+  const pos = a.current_position && isFinite(+a.current_position.x)
+    ? { x: +a.current_position.x, y: +a.current_position.y, a: +a.current_position.a } : null;
+  const charge = pts(a.charge_positions);
+  if (!lawns.length) return null;
+
+  // Ausschnitt: die Rasenflächen, mit etwas Rand für den Mäherpunkt
+  const all = lawns.flat();
+  const minX = Math.min(...all.map((p) => p.x)), maxX = Math.max(...all.map((p) => p.x));
+  const minY = Math.min(...all.map((p) => p.y)), maxY = Math.max(...all.map((p) => p.y));
+  const pad = Math.max(maxX - minX, maxY - minY) * 0.04 + 300;
+  const vx = minX - pad, vw = maxX - minX + 2 * pad;
+  const vy = -(maxY + pad), vh = maxY - minY + 2 * pad;
+  const pth = (l, zu) => l.map((p, i) => `${i ? 'L' : 'M'}${Math.round(p.x)} ${Math.round(-p.y)}`)
+    .join('') + (zu ? 'Z' : '');
+  const k = vw / 360; // Millimeter pro Bildschirmpunkt bei voller Kartenbreite
+
+  return `
+    <svg viewBox="${vx} ${vy} ${vw} ${vh}" class="garden" preserveAspectRatio="xMidYMid meet">
+      ${lawns.map((l) => `<path class="lawn" d="${pth(l, true)}" stroke-width="${(1.4 * k).toFixed(0)}"/>`).join('')}
+      ${lanes.length ? `<path class="lanes" stroke-width="110" d="${lanes
+        .map((l) => `M${l[0]} ${-l[1]}L${l[2]} ${-l[3]}`).join('')}"/>` : ''}
+      ${edges.map((e) => `<path class="edge" stroke-width="140" d="${pth(e, false)}"/>`).join('')}
+      ${obstacles.map((o) => `<path class="obst" d="${pth(o, true)}"/>`).join('')}
+      ${charge.map((c) => `<circle class="dock" cx="${c.x}" cy="${-c.y}" r="${(5 * k).toFixed(0)}"
+        stroke-width="${(1.6 * k).toFixed(0)}"/>`).join('')}
+      ${pos ? `<g transform="translate(${pos.x} ${-pos.y})${isFinite(pos.a) ? ` rotate(${-pos.a})` : ''}">
+        <circle class="me-halo" r="${(11 * k).toFixed(0)}"/>
+        <circle class="me" r="${(5.5 * k).toFixed(0)}" stroke-width="${(1.8 * k).toFixed(0)}"/>
+      </g>` : ''}
+    </svg>`;
+}
+
+class OnyxMowerCard extends OnyxVacuumCard {
+  static get CSS() {
+    return OnyxVacuumCard.CSS + `
+    /* Garten: Rasen im Grün der Karte, gemähte Bahnen in der Akzentfarbe */
+    .map svg.garden{ width:100%; height:auto; max-height:var(--map-h, 320px); display:block; }
+    .garden .lawn{ fill:rgba(96,170,104,.20); stroke:rgba(140,205,140,.45); }
+    .garden .lanes, .garden .edge{ fill:none; stroke:var(--acc,#7fcf8a); opacity:.55;
+                                   stroke-linecap:butt; stroke-linejoin:round; }
+    .garden .obst{ fill:rgba(10,12,15,.75); stroke:rgba(255,255,255,.10); stroke-width:20; }
+    .garden .dock{ fill:#15181d; stroke:#c8d8e6; }
+    .garden .me{ fill:var(--acc,#7fcf8a); stroke:#fff; }
+    .garden .me-halo{ fill:var(--acc,#7fcf8a); opacity:.22; }
+    /* Das Produktfoto steht auf weissem Studiogrund — im Ring rund und hell */
+    .ring.big > .vico.photo{ background:#fff; }
+    `;
+  }
+
+  static getStubConfig(hass) {
+    return { type: 'custom:onyx-mower-card', entity: firstEntity(hass, 'lawn_mower') };
+  }
+
+  setConfig(config) {
+    if (!config.entity) throw new Error(t('err.needEntity'));
+    if (config.entity.split('.')[0] !== 'lawn_mower') throw new Error(t('err.needMower'));
+    this._open = null;
+    this._picked = [];
+    OnyxBase.prototype.setConfig.call(this, config);
+  }
+
+  _num(id) {
+    const st = id ? this._hass.states[id] : null;
+    const n = st && !isDead(st) ? Number(st.state) : NaN;
+    return isNaN(n) ? null : n;
+  }
+
+  _model() {
+    const st = this._hass.states[this._config.entity];
+    if (!st) throw new Error(t('err.entity', { id: this._config.entity }));
+    const f = st.attributes.supported_features || 0;
+    const state = st.state;
+    const batt = this._battery(st);
+    const busy = MOW_BUSY.includes(state);
+    const errSt = this._config.error_entity ? this._hass.states[this._config.error_entity] : null;
+    const errText = errSt && !isDead(errSt) && !/^(0|none|noerror|kein)/i.test(String(errSt.state))
+      ? String(errSt.state).replace(/^[A-Za-z]+:\s*/, '') : null;
+    const progress = this._num(this._config.progress_entity);
+    return {
+      id: this._config.entity,
+      name: this._config.name || nameOf(this._hass, this._config.entity),
+      label: this._config.label || t('mow'),
+      icon: this._config.icon || 'mdi:robot-mower',
+      color: this._config.color || 'gruen',
+      state,
+      dead: isDead(st),
+      batt,
+      charging: state === 'docked' && batt != null && batt < 100,
+      busy,
+      minutes: busy ? sinceMin(st.last_changed) : null,
+      area: this._num(this._config.area_entity),
+      progress: progress != null ? Math.round(progress) : null,
+      error: state === 'error' ? (errText || t('vac.errorGeneric')) : null,
+      can: {
+        start: !!(f & MF_MOW.START), pause: !!(f & MF_MOW.PAUSE), dock: !!(f & MF_MOW.DOCK),
+        stop: !!this._config.stop_button
+      },
+      robot: null,
+      image: this._config.image || null,
+      map: this._mapModel()
+    };
+  }
+
+  /**
+   * Kartensensor (GOAT) wird selbst gezeichnet; Kamera- oder Bild-Entitäten
+   * zeigen wie beim Saugroboter ihr `entity_picture`.
+   */
+  _mapModel() {
+    const id = this._config.map;
+    if (!id) return null;
+    const st = this._hass.states[id];
+    const h = Number(this._config.map_height) || null;
+    if (!st) return { id, h, svg: null, url: null };
+    const dom = id.split('.')[0];
+    if (dom === 'camera' || dom === 'image') {
+      return { id, h, svg: null, url: isDead(st) ? null : st.attributes.entity_picture || null };
+    }
+    let svg = null;
+    try { svg = mowerMapSvg(st.attributes || {}); } catch (e) { svg = null; }
+    return { id, h, svg, url: null };
+  }
+
+  _stateWord(m) {
+    if (m.dead) return t('unavailable');
+    if (m.state === 'mowing') return t('mow.mowing');
+    if (m.state === 'paused') return t('vac.paused');
+    if (m.state === 'returning') return t('vac.returning');
+    if (m.state === 'error') return t('vac.stopped');
+    if (m.state === 'docked') return t(m.charging ? 'vac.charging' : 'vac.charged');
+    return t('vac.idle');
+  }
+
+  _summary(m) {
+    const bits = [];
+    if (m.state === 'returning') bits.push(t('vac.toDock'));
+    else if (m.state === 'docked') bits.push(t('vac.docked'));
+    else bits.push(this._stateWord(m));
+    if (m.minutes != null) bits.push(t('vac.since', { t: t('vac.minutes', { n: m.minutes }) }));
+    if (m.area) bits.push(t('vac.area', { n: nfmt(m.area, m.area < 10 ? 1 : 0) }));
+    // Der GOAT meldet während des Mähens oft 0 % — das wäre irreführend
+    if (m.busy && m.progress) bits.push(`${m.progress} %`);
+    return bits.join(' · ');
+  }
+
+  _primary(m) {
+    if (m.state === 'mowing') return { key: 'pause', icon: 'mdi:pause', text: t('vac.pause') };
+    if (m.state === 'paused') return { key: 'start', icon: 'mdi:play', text: t('vac.resume') };
+    if (m.state === 'returning') return { key: 'start', icon: 'mdi:play', text: t('mow.start') };
+    return { key: 'start', icon: 'mdi:play', text: t('mow.start') };
+  }
+
+  _html(m) {
+    const { cls, style } = paletteAttrs(m.error ? 'rot' : m.color, this._config);
+    const warm = (m.busy || m.charging) && !m.dead;
+    const p = this._primary(m);
+    const ringCls = [m.batt != null && m.batt < 20 ? 'low' : '',
+      m.state === 'mowing' ? 'run' : '', m.dead ? 'dead' : ''].join(' ');
+
+    return `
+    <ha-card class="${(cls + (warm ? ' warm' : '') + (m.dead ? ' off' : '')).trim()}"${style}>
+      <div class="head">
+        <div class="hleft" id="hl">
+          <div class="ring ${ringCls}${m.image ? ' big' : ''}"
+               style="--b:${m.batt == null ? 0 : m.batt}">
+            <div class="vico${m.image ? ' photo' : ''}">${m.image
+              ? `<img src="${esc(m.image)}" alt="">`
+              : `<ha-icon icon="${esc(m.icon)}"></ha-icon>`}</div>
+          </div>
+          <div style="min-width:0">
+            <div class="lab">${esc(m.label)}</div>
+            <div class="nm">${esc(m.name)}</div>
+          </div>
+        </div>
+        <div class="env">
+          <div class="t">${m.batt == null ? '–' : m.batt + ' %'}</div>
+          <div class="h">${esc(this._stateWord(m))}</div>
+        </div>
+      </div>
+
+      ${m.error ? `<div class="warn"><ha-icon icon="mdi:alert-circle-outline"></ha-icon>${esc(m.error)}</div>`
+        : m.dead ? '' : `<div class="sub">${esc(this._summary(m))}</div>`}
+
+      ${m.map ? `
+      <div class="map" id="vmap"${m.map.h ? ` style="--map-h:${m.map.h}px"` : ''}>
+        ${m.map.svg || (m.map.url ? `<img src="${esc(m.map.url)}" alt="${esc(t('vac.map'))}">` : '')
+          || `<div class="nomap"><ha-icon icon="mdi:map-outline"></ha-icon>${esc(t('mow.noMap'))}</div>`}
+      </div>` : ''}
+
+      <div class="ctl">
+        <div class="prim glass ${m.busy && !m.dead ? 'on' : ''}" id="prim">
+          <ha-icon icon="${esc(p.icon)}"></ha-icon>${esc(p.text)}</div>
+        <div class="gbtn glass ${m.state === 'docked' || !m.can.dock ? 'dim' : ''}" id="home">
+          <ha-icon icon="mdi:home-import-outline"></ha-icon></div>
+        <div class="gbtn glass ${m.can.stop && m.busy ? '' : 'dim'}" id="stop">
+          <ha-icon icon="mdi:stop"></ha-icon></div>
+      </div>
+    </ha-card>`;
+  }
+
+  _bind(m) {
+    const root = this.shadowRoot;
+    const p = this._primary(m);
+    this._press(root.getElementById('hl'), {
+      onTap: () => fireMoreInfo(this, m.id),
+      onHold: () => fireMoreInfo(this, m.id)
+    });
+    this._press(root.getElementById('prim'), {
+      onTap: () => {
+        if (m.dead) return;
+        if (p.key === 'pause') return this.call('lawn_mower', 'pause', { entity_id: m.id });
+        this.call('lawn_mower', 'start_mowing', { entity_id: m.id });
+      },
+      onHold: () => fireMoreInfo(this, m.id)
+    });
+    this._press(root.getElementById('home'), {
+      onTap: () => {
+        if (!m.dead && m.can.dock && m.state !== 'docked') {
+          this.call('lawn_mower', 'dock', { entity_id: m.id });
+        }
+      }
+    });
+    // Stopp ist eine eigene Taste der Integration (Auftrag beenden, nicht
+    // bloss anhalten) — darum ein Button statt eines lawn_mower-Dienstes.
+    this._press(root.getElementById('stop'), {
+      onTap: () => {
+        if (!m.dead && m.can.stop && m.busy) {
+          this.call('button', 'press', { entity_id: this._config.stop_button });
+        }
+      }
+    });
+    const karte = root.getElementById('vmap');
+    if (karte) this._press(karte, { onTap: () => fireMoreInfo(this, m.map.id) });
+  }
+
+  getCardSize() { return 6; }
 }
 
 /* ------------------------------------------------------------------ *
@@ -12342,6 +12623,7 @@ defineCard('onyx-status-card', OnyxStatusCard);
 defineCard('onyx-climate-card', OnyxClimateCard);
 defineCard('onyx-energy-card', OnyxEnergyCard);
 defineCard('onyx-quick-card', OnyxQuickCard);
+defineCard('onyx-mower-card', OnyxMowerCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push(
@@ -12434,6 +12716,12 @@ window.customCards.push(
     name: t('card.quick'),
     description: t('card.quick.d'),
     preview: true
+  },
+  {
+    type: 'onyx-mower-card',
+    name: t('card.mower'),
+    description: t('card.mower.d'),
+    preview: true
   }
 );
 
@@ -12441,5 +12729,5 @@ export {
   OnyxRoomCard, OnyxSliderCard, OnyxCoverCard,
   OnyxMediaCard, OnyxActionsCard, OnyxChartCard, OnyxVacuumCard, OnyxWeatherCard,
   OnyxLightCard, OnyxCameraCard, OnyxLockCard, OnyxStatusCard, OnyxClimateCard,
-  OnyxEnergyCard, OnyxQuickCard
+  OnyxEnergyCard, OnyxQuickCard, OnyxMowerCard
 };

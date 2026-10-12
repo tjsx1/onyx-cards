@@ -4,7 +4,7 @@
 [Sprache / Language](#sprache--language) below for what that means and how to switch.
 The reference documentation on this page is German.
 
-Fünfzehn Lovelace-Karten für Home Assistant: dunkle Flächen, Glasknöpfe, sieben wählbare
+Sechzehn Lovelace-Karten für Home Assistant: dunkle Flächen, Glasknöpfe, sieben wählbare
 Kartenfarben — für die Bedienung am Handy gebaut.
 
 Keine Abhängigkeiten — weder button-card noch card-mod nötig. Alle Karten lassen sich
@@ -21,6 +21,7 @@ Keine Abhängigkeiten — weder button-card noch card-mod nötig. Alle Karten la
 | `onyx-actions-card` | Schnellzugriffe für Szenen, Skripte und Automationen |
 | `onyx-chart-card` | Bis zu vier Messwerte, Verläufe wählbar, Werte beim Ziehen |
 | `onyx-vacuum-card` | Saugroboter mit Akkuring, Raumauswahl und Verbrauchsteilen |
+| `onyx-mower-card` | Rasenmäher mit Akkuring, Foto, gezeichneter Gartenkarte und gemähten Bahnen |
 | `onyx-weather-card` | Wetter mit gezeichneter Szene, Messwerten und Vorhersage |
 | `onyx-light-card` | Licht als eine Zeile; Regler, Farbrad und Effekte klappen aus |
 | `onyx-camera-card` | Kamera mit Livebild, Bewegung, Licht und Türöffner |
@@ -1037,7 +1038,7 @@ die Sammlung weiterhin eine einzelne Datei ohne Abhängigkeiten, und die Szene k
 Farbe der Karte annehmen. Wer im Betriebssystem „Bewegung reduzieren" gesetzt hat,
 bekommt ein Standbild.
 
-Fünfzehn Lagen sind gezeichnet, dazu die Nachtfassungen von *klar* und *teils bewölkt*:
+Sechzehn Lagen sind gezeichnet, dazu die Nachtfassungen von *klar* und *teils bewölkt*:
 Ob Sonne oder Mond erscheint, entscheidet der Stand von `sun.sun`. Die Sonne bleibt
 gelb, egal welche Farbe die Karte trägt — nur der Mond nimmt den Akzent an, sonst sähe
 eine Vollmondnacht aus wie ein Sonnentag.
@@ -1580,6 +1581,35 @@ gewählten Knopf.
 
 Einen visuellen Editor hat die Karte noch nicht; sie wird in YAML eingerichtet.
 
+### onyx-mower-card
+
+Der Rasenmäher im selben Aufbau wie die Saugroboter-Karte: Akkuring mit Foto,
+Zustand, darunter die Karte des Gartens und die Bedienreihe **Mähen/Pause · zur
+Station · Stopp**.
+
+```yaml
+type: custom:onyx-mower-card
+entity: lawn_mower.goat
+battery_entity: sensor.goat_battery_level
+area_entity: sensor.goat_mowing_area        # gemähte Fläche in m²
+progress_entity: sensor.goat_mowing_progress
+error_entity: sensor.goat_error
+map: sensor.goat_live_map                   # oder camera./image.
+stop_button: button.goat_stop_mowing
+image: /local/goat.png                      # Foto im Akkuring
+```
+
+| Option | Vorgabe | Wirkung |
+|---|---|---|
+| `map` | — | Kartensensor der GOAT-Integration (`info.lawns`/`outline`, `info.obstacles`, `trace.lanes`, `current_position`) — die Karte zeichnet Rasen, Hindernisse, gemähte Bahnen und den Mäher selbst. Eine `camera.`/`image.`-Entität zeigt stattdessen deren Bild |
+| `map_height` | `320` | höchste Höhe der Karte in Pixeln |
+| `stop_button` | — | `button.` zum Beenden des Auftrags; ohne bleibt der Stopp-Knopf grau |
+| `image` | — | Foto im Akkuring, rund auf weissem Grund |
+| `color` | `gruen` | Kartenfarbe; bei einer Störung rot |
+| `battery_entity`, `area_entity`, `progress_entity`, `error_entity` | — | Messwerte für Ring und Zusammenfassung |
+
+Einen visuellen Editor hat die Karte noch nicht; sie wird in YAML eingerichtet.
+
 ## Visueller Editor
 
 Alle Karten bringen einen eigenen Editor mit. Beim Hinzufügen über
@@ -1733,6 +1763,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.20.0** — Neue Karte **`onyx-mower-card`**: Rasenmäher im Aufbau der Saugroboter-Karte, mit Foto im Akkuring und einer selbst gezeichneten Gartenkarte (Rasenflächen, Hindernisse, gemähte Bahnen, Mäherpunkt) aus dem Kartensensor der GOAT-Integration
 
 **1.19.0** — Saugroboter-Karte: **Karte der Wohnung** über `map:` (Kamera- oder Bild-Entität, z. B. Dreame `camera.…_map`), und das **Gerät im Akkuring** — gezeichnet in Schwarz oder Weiss (`robot:`) oder als eigenes Foto (`image:`)
 
