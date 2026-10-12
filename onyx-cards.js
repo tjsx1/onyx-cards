@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.24.0';
+const ONYX_VERSION = '1.24.1';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -5755,8 +5755,11 @@ class OnyxVacuumCard extends OnyxBase {
       if (!all || typeof all !== 'object') return [];
       const list = Array.isArray(all) ? all
         : all[st.attributes.selected_map] || Object.values(all)[0] || [];
+      // `hide_rooms` blendet Phantomräume aus (z. B. eine Terrasse, die der
+      // Lidar durchs Fenster gesehen hat)
+      const hide = (this._config.hide_rooms || []).map(String);
       return (Array.isArray(list) ? list : [])
-        .filter((r) => r && r.id != null)
+        .filter((r) => r && r.id != null && !hide.includes(String(r.id)))
         .map((r) => ({ id: String(r.id), name: r.name || String(r.id), icon: r.icon || null }));
     }
     return (cfg || [])

@@ -957,6 +957,7 @@ rooms:
 | `room_command` | `app_segment_clean` | Der Befehl, den `vacuum.send_command` bekommt |
 | `room_service` | automatisch | Dienst für Raumreinigung, bekommt `entity_id` + `segments`. Ist die Dreame-Integration da und kein `room_command` gesetzt, nimmt die Karte `dreame_vacuum.vacuum_clean_segment` |
 | `rooms: true` | — | Räume aus dem Gerät lesen (Attribut `rooms`, Dreame) statt sie aufzulisten |
+| `hide_rooms` | — | Raum-IDs, die bei `rooms: true` nicht erscheinen sollen, z. B. `[8]` |
 | `consumables` | — | Sensoren für Filter, Bürsten, Wischtuch |
 | `show_fan_speed` | `true` | Blendet die Stufenreihe aus |
 | `map` | — | Kamera- oder Bild-Entität mit der Karte der Wohnung, z. B. `camera.x50_master_map` (Dreame) |
@@ -1773,6 +1774,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.24.1** — Saugroboter-Karte: `hide_rooms` blendet Räume aus, die das Gerät meldet, die es aber nicht gibt
 
 **1.24.0** — Saugroboter-Karte: **Räume aus dem Gerät** mit `rooms: true` (Dreame-Integration: Attribut `rooms` der gewählten Karte), Raumreinigung über **`room_service`** — bei der Dreame-Integration automatisch `dreame_vacuum.vacuum_clean_segment` mit `segments` —, und sichtbare Reiter **Räume · Verbrauchsteile** unter der Bedienung (vorher nur durch Tippen auf den Kopf erreichbar). Die Reiter teilt sich die Rasenmäher-Karte
 
