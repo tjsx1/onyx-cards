@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.27.0';
+const ONYX_VERSION = '1.28.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -5560,6 +5560,29 @@ function vacCalib(points) {
   });
 }
 
+/** Die zugeschnittene Karte mit Grundriss als SVG (Karte und Grossansicht) */
+function vacClipSvg(map, idp, cls = 'vclip') {
+  const c = map.clip;
+  return `
+    <svg class="${cls}" viewBox="${c.box.join(' ')}" role="img" aria-label="${esc(t('vac.map'))}"
+         xmlns="http://www.w3.org/2000/svg">
+      <defs><clipPath id="${idp}haus"><polygon points="${c.pts}"/></clipPath></defs>
+      <image href="${esc(map.url)}" x="0" y="0" width="${c.w}" height="${c.h}" clip-path="url(#${idp}haus)"/>
+      ${c.walls ? `
+      <mask id="${idp}mauer" maskUnits="userSpaceOnUse" x="${c.box[0]}" y="${c.box[1]}"
+            width="${c.box[2]}" height="${c.box[3]}">
+        <polygon points="${c.walls.outer}" fill="#fff"/>
+        ${c.walls.holes.map((h) => `<polygon points="${h}" fill="#000"/>`).join('')}
+      </mask>
+      <rect fill="#c8d2dc" x="${c.box[0]}" y="${c.box[1]}" width="${c.box[2]}" height="${c.box[3]}"
+            mask="url(#${idp}mauer)"/>` : ''}
+      ${c.labels.map((l) => `<text x="${l.x}" y="${l.y}" font-size="${c.fs}"
+        stroke-width="${Math.round(c.fs * 0.28)}" fill="#1d2733" stroke="rgba(255,255,255,.85)"
+        paint-order="stroke" stroke-linejoin="round" font-weight="600" text-anchor="middle"
+        dominant-baseline="middle" font-family="system-ui, sans-serif">${esc(l.name)}</text>`).join('')}
+    </svg>`;
+}
+
 class OnyxVacuumCard extends OnyxBase {
   static get CSS() {
     return PAL_CSS + `
@@ -6099,22 +6122,7 @@ class OnyxVacuumCard extends OnyxBase {
 
       ${m.map ? `
       <div class="map" id="vmap"${m.map.h ? ` style="--map-h:${m.map.h}px"` : ''}>
-        ${m.map.url && m.map.clip ? `
-          <svg class="vclip" viewBox="${m.map.clip.box.join(' ')}" role="img" aria-label="${esc(t('vac.map'))}">
-            <defs><clipPath id="vhaus"><polygon points="${m.map.clip.pts}"/></clipPath></defs>
-            <image href="${esc(m.map.url)}" x="0" y="0" width="${m.map.clip.w}" height="${m.map.clip.h}"
-                   clip-path="url(#vhaus)"/>
-            ${m.map.clip.walls ? `
-            <mask id="vmauer" maskUnits="userSpaceOnUse" x="${m.map.clip.box[0]}" y="${m.map.clip.box[1]}"
-                  width="${m.map.clip.box[2]}" height="${m.map.clip.box[3]}">
-              <polygon points="${m.map.clip.walls.outer}" fill="#fff"/>
-              ${m.map.clip.walls.holes.map((h) => `<polygon points="${h}" fill="#000"/>`).join('')}
-            </mask>
-            <rect class="wall" x="${m.map.clip.box[0]}" y="${m.map.clip.box[1]}"
-                  width="${m.map.clip.box[2]}" height="${m.map.clip.box[3]}" mask="url(#vmauer)"/>` : ''}
-            ${m.map.clip.labels.map((l) => `<text class="rlab" x="${l.x}" y="${l.y}"
-              font-size="${m.map.clip.fs}" stroke-width="${Math.round(m.map.clip.fs * 0.28)}">${esc(l.name)}</text>`).join('')}
-          </svg>`
+        ${m.map.url && m.map.clip ? vacClipSvg(m.map, 'v')
           : m.map.url
           ? `<img src="${esc(m.map.url)}" alt="${esc(t('vac.map'))}">`
           : `<div class="nomap"><ha-icon icon="mdi:map-outline"></ha-icon>${esc(t('vac.noMap'))}</div>`}
@@ -6232,7 +6240,63 @@ class OnyxVacuumCard extends OnyxBase {
     });
 
     const karte = root.getElementById('vmap');
-    if (karte) this._press(karte, { onTap: () => fireMoreInfo(this, m.map.id) });
+    if (karte) {
+      this._press(karte, {
+        onTap: () => (m.map.clip ? this._openBigMap() : fireMoreInfo(this, m.map.id)),
+        onHold: () => fireMoreInfo(this, m.map.id)
+      });
+    }
+    // Offene Grossansicht laufend mitziehen (Roboter fährt, Karte wächst)
+    if (this._big && m.map && m.map.clip) this._big.firstElementChild.innerHTML = vacClipSvg(m.map, 'vb', '');
+  }
+
+  /**
+   * Grossansicht über dem ganzen Bildschirm. Sie hängt direkt am Dokument,
+   * nicht in der Karte — sonst sperren Elternelemente mit transform oder
+   * backdrop-filter das position:fixed auf ihre eigene Fläche ein.
+   */
+  _openBigMap() {
+    if (this._big) return;
+    const m = this._model();
+    if (!m.map || !m.map.clip) return;
+    const ov = document.createElement('div');
+    ov.setAttribute('role', 'dialog');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(6,8,12,.9);'
+      + 'display:grid;place-items:center;padding:16px;box-sizing:border-box;cursor:zoom-out;'
+      + '-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);';
+    const box = document.createElement('div');
+    box.style.cssText = 'width:min(100%, 92vh);max-height:100%;';
+    box.innerHTML = vacClipSvg(m.map, 'vb', '');
+    const svg = box.firstElementChild;
+    if (svg) svg.style.cssText = 'width:100%;height:auto;max-height:calc(100vh - 32px);display:block;';
+    ov.appendChild(box);
+    let zu = false;
+    const close = () => {
+      if (zu) return;
+      zu = true;
+      ov.remove();
+      this._big = null;
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('popstate', onPop);
+    };
+    const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+    // Zurück-Taste am Handy schliesst die Ansicht statt die Seite zu verlassen
+    const onPop = () => close();
+    ov.addEventListener('click', () => {
+      if (history.state && history.state.onyxBigMap) {
+        history.back();
+        setTimeout(close, 400); // falls der Browser kein popstate schickt
+      } else close();
+    });
+    window.addEventListener('keydown', onKey);
+    try { history.pushState({ onyxBigMap: true }, ''); window.addEventListener('popstate', onPop); } catch (e) { /* egal */ }
+    document.body.appendChild(ov);
+    this._big = box;
+  }
+
+  disconnectedCallback() {
+    if (super.disconnectedCallback) super.disconnectedCallback();
+    if (this._big) { this._big.parentElement.remove(); this._big = null; }
   }
 
   getCardSize() {

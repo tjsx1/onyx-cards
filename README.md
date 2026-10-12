@@ -1778,6 +1778,8 @@ statt einfach weiß zu bleiben.
 
 ## Änderungen
 
+**1.28.0** — Saugroboter-Karte: mit Grundriss öffnet ein Tipp auf die Karte eine **Grossansicht** im selben Look (Vollbild, läuft live mit; Tippen, Esc oder Zurück schliesst). Halten öffnet weiterhin das Detailfenster der Kamera
+
 **1.27.0** — Saugroboter-Karte: mit Grundriss zeichnet die Karte die **Raumnamen selbst**, mittig in den Teil des Raums, der im Haus liegt (`map_labels`)
 
 **1.26.0** — Saugroboter-Karte: **`map_walls`** zeichnet die Mauern eines Grundrisses über die Roboterkarte und schneidet sie auf die Aussenkante zu
