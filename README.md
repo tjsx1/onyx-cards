@@ -1764,6 +1764,8 @@ statt einfach weiß zu bleiben.
 
 ## Änderungen
 
+**1.20.1** — Rasenmäher-Karte: das Foto füllt den Kreis jetzt immer ganz und rund aus (als Hintergrund des Kreises statt als eingesetztes Bild)
+
 **1.20.0** — Neue Karte **`onyx-mower-card`**: Rasenmäher im Aufbau der Saugroboter-Karte, mit Foto im Akkuring und einer selbst gezeichneten Gartenkarte (Rasenflächen, Hindernisse, gemähte Bahnen, Mäherpunkt) aus dem Kartensensor der GOAT-Integration
 
 **1.19.0** — Saugroboter-Karte: **Karte der Wohnung** über `map:` (Kamera- oder Bild-Entität, z. B. Dreame `camera.…_map`), und das **Gerät im Akkuring** — gezeichnet in Schwarz oder Weiss (`robot:`) oder als eigenes Foto (`image:`)

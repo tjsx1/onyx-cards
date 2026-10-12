@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.20.0';
+const ONYX_VERSION = '1.20.1';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -6104,8 +6104,13 @@ class OnyxMowerCard extends OnyxVacuumCard {
     .garden .dock{ fill:#15181d; stroke:#c8d8e6; }
     .garden .me{ fill:var(--acc,#7fcf8a); stroke:#fff; }
     .garden .me-halo{ fill:var(--acc,#7fcf8a); opacity:.22; }
-    /* Das Produktfoto steht auf weissem Studiogrund — im Ring rund und hell */
-    .ring.big > .vico.photo{ background:#fff; }
+    /* Das Produktfoto steht auf weissem Studiogrund. Als Hintergrund des
+       Kreises statt als <img>: so füllt es den Kreis immer ganz, auch wenn
+       der Ring beim Mähen dreht (ein gedrehtes Element beschneidet sein
+       Bild sonst nicht verlässlich rund). */
+    .ring.big > .vico.photo, ha-card.warm .ring.big > .vico.photo{
+      background-color:#fff; background-size:cover; background-position:center;
+      background-repeat:no-repeat; }
     `;
   }
 
@@ -6224,9 +6229,9 @@ class OnyxMowerCard extends OnyxVacuumCard {
         <div class="hleft" id="hl">
           <div class="ring ${ringCls}${m.image ? ' big' : ''}"
                style="--b:${m.batt == null ? 0 : m.batt}">
-            <div class="vico${m.image ? ' photo' : ''}">${m.image
-              ? `<img src="${esc(m.image)}" alt="">`
-              : `<ha-icon icon="${esc(m.icon)}"></ha-icon>`}</div>
+            ${m.image
+              ? `<div class="vico photo" style="background-image:url(&quot;${esc(m.image)}&quot;)"></div>`
+              : `<div class="vico"><ha-icon icon="${esc(m.icon)}"></ha-icon></div>`}
           </div>
           <div style="min-width:0">
             <div class="lab">${esc(m.label)}</div>
