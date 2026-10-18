@@ -29,7 +29,7 @@ Keine Abhängigkeiten — weder button-card noch card-mod nötig. Alle Karten la
 | `onyx-status-card` | Mehrere Zustände in einer Karte, aus Bausteinen und Vorlagen |
 | `onyx-climate-card` | Thermostat mit Ring, Betriebsarten und Voreinstellungen — der Ring steckt auch in der Raum-Karte |
 | `onyx-energy-card` | Energiefluss zwischen Netz, PV, Batterie, Haus und Wallbox |
-| `onyx-quick-card` | Favoriten aus dem ganzen Haus: Lampen als Kacheln, Storen als Zeilen mit Fahrknöpfen |
+| `onyx-quick-card` | Favoriten aus dem ganzen Haus: Lampen und Storen als Kacheln |
 
 ## Installation über HACS
 
@@ -1546,8 +1546,9 @@ Zeile ganz. Ein Sensor schlägt immer den gerechneten Wert.
 ### onyx-quick-card
 
 Favoriten aus dem ganzen Haus in einer Karte — die Lampen und Storen, die man
-täglich braucht, ohne erst den Raum zu öffnen. Oben die Lampen als Kacheln in zwei
-Spalten, darunter die Storen als Zeilen mit **auf · Halt · zu**, wie in der Raum-Karte.
+täglich braucht, ohne erst den Raum zu öffnen. Oben die Lampen, darunter die Storen,
+beide als Kacheln in zwei Spalten. Bei Storen zeigt der Balken die Öffnung. Mit
+`cover_style: rows` werden die Storen wieder Zeilen mit **auf · Halt · zu**, wie in der Raum-Karte.
 
 ```yaml
 type: custom:onyx-quick-card
@@ -1566,7 +1567,8 @@ covers:
 | Option | Vorgabe | Wirkung |
 |---|---|---|
 | `lights` (`lampen`) | — | Lampen-Kacheln. Erlaubt sind auch `switch.` und andere schaltbare Entitäten |
-| `covers` (`storen`, `rollos`) | — | Storen-Zeilen |
+| `covers` (`storen`, `rollos`) | — | Storen-Kacheln |
+| `cover_style` | `tiles` | `rows` (`zeilen`): Storen als Zeilen mit Fahrknöpfen statt als Kacheln |
 | `room` am Eintrag | — | kleine Raumangabe neben dem Namen der Kachel |
 | `title` | `Schnellzugriff` | Überschrift |
 | `icon` | `mdi:star-outline` | Symbol der Überschrift |
@@ -1575,7 +1577,7 @@ covers:
 
 **Bedienung.** Kachel antippen schaltet die Lampe. **Halten** öffnet über der Karte
 die ausgeklappte Licht-Karte — Helligkeit, Farbtemperatur, Farbrad, Effekte; ein
-reiner Schalter öffnet stattdessen das Detailfenster. Eine Storen-Zeile antippen
+reiner Schalter öffnet stattdessen das Detailfenster. Eine Storen-Kachel (bzw. -Zeile) antippen
 fährt die Store auf bzw. zu, während der Fahrt hält ein Tipp sie an. **Halten** öffnet
 Position (ziehen oder tippen), die drei Fahrknöpfe gross und die Lamellen *Zu · Halb ·
 Offen*. Ein Tipp auf den dunklen Rand oder das ✕ schliesst das Menü.
@@ -1780,6 +1782,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.31.0** — Schnellzugriff-Karte: Storen sind jetzt Kacheln wie die Lampen (Balken = Öffnung, Tippen fährt/hält, Halten öffnet Position und Lamellen); die alten Zeilen gibt es mit `cover_style: rows`
 
 **1.30.0** — Rasenmäher-Karte: `map_rotation` dreht die ganze Karte samt Mäher und Kurs
 

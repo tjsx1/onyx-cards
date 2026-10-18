@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.30.0';
+const ONYX_VERSION = '1.31.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -12712,8 +12712,9 @@ class OnyxEnergyEditor extends OnyxEditor {
 /* ================================================================== *
  * 15) SCHNELLZUGRIFF-KARTE
  *
- * Favoriten aus dem ganzen Haus in einer Karte: oben die Lampen als
- * Kacheln, darunter die Storen als Zeilen mit ihren drei Fahrknöpfen.
+ * Favoriten aus dem ganzen Haus in einer Karte: oben die Lampen, darunter
+ * die Storen — beide als Kacheln. Mit `cover_style: rows` bleiben die
+ * Storen Zeilen mit ihren drei Fahrknöpfen.
  * Tippen schaltet bzw. fährt, Halten öffnet ein Menü über der Karte —
  * bei Lampen die ausgeklappte Licht-Karte, bei Storen Position und
  * Lamellen.
@@ -12755,6 +12756,10 @@ class OnyxQuickCard extends OnyxBase {
               border-color:color-mix(in srgb, var(--lite) 32%, transparent); }
     .tile.dead{ opacity:.45; }
     .tile.held{ transform:scale(.96); }
+    /* Eine Store-Kachel ist „an“, solange sie offen ist; fährt sie,
+       pulsiert der Balken. */
+    .tile.mov .tl i{ animation:qkmov 1.2s ease-in-out infinite; }
+    @keyframes qkmov{ 50%{ opacity:.35; } }
     .ttop{ display:flex; align-items:center; justify-content:space-between; gap:6px; }
     .tico{ width:32px; height:32px; border-radius:50%; flex:none; display:grid;
            place-items:center; --mdc-icon-size:17px; color:#8ea3b5;
@@ -12912,6 +12917,8 @@ class OnyxQuickCard extends OnyxBase {
         icon: e.icon || a.icon || 'mdi:window-shutter',
         pos, state, dead, text,
         moving: state === 'opening' || state === 'closing',
+        tileIcon: e.icon || a.icon || (pos > 2 ? 'mdi:window-shutter-open' : 'mdi:window-shutter'),
+        val: dead ? t('unavailable') : pos >= 98 ? t('open') : pos <= 2 ? t('closed') : `${pos} %`,
         tilt: !!tiltScript || ((a.supported_features || 0) & 128) !== 0
       };
     });
@@ -12926,6 +12933,7 @@ class OnyxQuickCard extends OnyxBase {
 
     return {
       title: cfg.title || cfg.name || t('qk'),
+      coverRows: cfg.cover_style === 'rows' || cfg.cover_style === 'zeilen',
       icon: cfg.icon || 'mdi:star-outline',
       color: cfg.color || null,
       lights, covers, menu,
@@ -12971,6 +12979,22 @@ class OnyxQuickCard extends OnyxBase {
           ${k('down', 'mdi:triangle-down', c.moving ? 'dim' : '')}
         </div>`;
     };
+
+    // Store als Kachel: gleicher Aufbau wie die Lampe, der Balken zeigt
+    // die Öffnung, oben rechts steht der Zustand bzw. die Fahrt.
+    const coverTiles = m.covers.map((c) => `
+      <div class="tile ${c.pos > 2 ? 'on' : ''} ${c.dead ? 'dead' : ''} ${c.moving ? 'mov' : ''}"
+           data-c="${esc(c.id)}">
+        <div class="ttop">
+          <div class="tico"><ha-icon icon="${esc(c.tileIcon)}"></ha-icon></div>
+          <div class="tval">${esc(c.moving ? c.text : c.val)}</div>
+        </div>
+        <div class="tbot">
+          <div class="tn"><span class="tname">${esc(c.name)}</span>${
+            c.room ? `<span class="troom">${esc(c.room)}</span>` : ''}</div>
+          <div class="tl"><i style="width:${c.pos}%"></i></div>
+        </div>
+      </div>`).join('');
 
     const rows = m.covers.map((c) => `
       <div class="lrow ${c.pos > 2 ? '' : 'off'} ${c.dead ? 'dead' : ''}" data-c="${esc(c.id)}">
@@ -13030,7 +13054,8 @@ class OnyxQuickCard extends OnyxBase {
         ${m.covers.length ? `
           <div class="grp"><span>${esc(t('group.cover'))}</span>
             <b>${esc(t('nOfMOpen', { n: m.nOpen, m: m.covers.length }))}</b></div>
-          <div class="rows">${rows}</div>` : ''}
+          ${m.coverRows ? `<div class="rows">${rows}</div>`
+            : `<div class="tiles">${coverTiles}</div>`}` : ''}
         ${ov}
       </ha-card>`;
   }
@@ -13075,9 +13100,9 @@ class OnyxQuickCard extends OnyxBase {
       this._press(knopf, { onTap: () => this.call('cover', dienst, { entity_id: id }) });
     });
 
-    // Ein Tipp auf die Zeile: fährt sie, hält sie an; sonst fährt sie
-    // dorthin, wo sie gerade nicht ist.
-    root.querySelectorAll('.lrow[data-c]').forEach((el) => {
+    // Ein Tipp auf Zeile oder Kachel: fährt sie, hält sie an; sonst fährt
+    // sie dorthin, wo sie gerade nicht ist.
+    root.querySelectorAll('.lrow[data-c], .tile[data-c]').forEach((el) => {
       const c = m.covers.find((x) => x.id === el.dataset.c);
       if (!c) return;
       this._press(el, {
@@ -13139,7 +13164,8 @@ class OnyxQuickCard extends OnyxBase {
     const m = this._config || {};
     const nl = (normList(m.lights || m.lampen) || []).length;
     const nc = (normList(m.covers || m.storen || m.rollos) || []).length;
-    return 1 + Math.ceil(nl / 2) * 2 + nc;
+    const rows = m.cover_style === 'rows' || m.cover_style === 'zeilen';
+    return 1 + Math.ceil(nl / 2) * 2 + (rows ? nc : Math.ceil(nc / 2) * 2);
   }
 }
 
