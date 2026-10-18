@@ -1783,6 +1783,8 @@ statt einfach weiß zu bleiben.
 
 ## Änderungen
 
+**1.31.1** — Aktionen-Karte (`shape: rail`): ausgeschaltete Schalter haben dasselbe Weiss wie Skripte und Szenen
+
 **1.31.0** — Schnellzugriff-Karte: Storen sind jetzt Kacheln wie die Lampen (Balken = Öffnung, Tippen fährt/hält, Halten öffnet Position und Lamellen); die alten Zeilen gibt es mit `cover_style: rows`
 
 **1.30.0** — Rasenmäher-Karte: `map_rotation` dreht die ganze Karte samt Mäher und Kurs

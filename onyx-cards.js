@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.31.0';
+const ONYX_VERSION = '1.31.1';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -4485,7 +4485,9 @@ class OnyxActionsCard extends OnyxBase {
               transition:transform .12s ease, background .18s ease; }
     .rail .r.on{ background:color-mix(in srgb, var(--t) 60%, transparent);
                  border-color:color-mix(in srgb, var(--t) 78%, transparent); color:#fff; }
-    .rail .r.off{ color:#8ea3b5; }
+    /* Ausgeschaltet heisst hier nur „nicht farbig“ — das Symbol bleibt im
+       selben Weiss wie bei Skripten und Szenen, sonst wirkt die Leiste
+       ungleichmässig. */
     .rail .r.dead{ opacity:.45; }
     .rail .r.held{ transform:scale(.92); }
     /* Gedrückt wird mit Text die ganze Spalte, schrumpfen soll aber nur der
