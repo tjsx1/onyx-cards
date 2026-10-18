@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.31.1';
+const ONYX_VERSION = '1.32.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -9012,6 +9012,14 @@ class OnyxStatusCard extends OnyxBase {
     .fhead{ margin-bottom:12px; display:flex; align-items:flex-start;
             justify-content:space-between; gap:14px; flex-wrap:wrap; }
     .ft{ min-width:0; }
+    /* Innen- und Aussentemperatur klein unter der Überschrift */
+    .temps{ display:flex; align-items:center; gap:10px; margin-top:6px;
+            font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; }
+    .temps .tp{ display:flex; align-items:center; gap:5px; cursor:pointer;
+                --mdc-icon-size:14px; }
+    .temps .tp.in{ color:#e9d2bd; } .temps .tp.in ha-icon{ color:#f0a35c; }
+    .temps .tp.out{ color:#c4dbee; } .temps .tp.out ha-icon{ color:#7fb6e0; }
+    .temps .sep{ width:1px; height:12px; background:rgba(255,255,255,.12); }
 
     /* Der Kopf: was gerade am meisten zählt, oder eine Störung */
     .head{ display:flex; align-items:center; gap:12px; padding:12px;
@@ -9584,6 +9592,19 @@ class OnyxStatusCard extends OnyxBase {
       head = alarm;
     }
 
+    // temperature: { inside, outside } — Aliase innen/aussen
+    const tc = cfg.temperature || cfg.temperatur || null;
+    const grad = (id) => {
+      if (!id) return null;
+      const v = parseFloat(this._hass.states[id] ? this._hass.states[id].state : NaN);
+      return { id, v: Number.isFinite(v)
+        ? fmtNum(v, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '°' : '–' };
+    };
+    const temps = tc ? [
+      Object.assign({ k: 'in', icon: 'mdi:home-outline' }, grad(tc.inside || tc.innen)),
+      Object.assign({ k: 'out', icon: 'mdi:weather-cloudy' }, grad(tc.outside || tc.aussen))
+    ].filter((x) => x.id) : [];
+
     // Über einer leeren Karte steht keine Zeile "0 Meldungen"
     const n = rows.length + chips.length + (head ? 1 : 0)
       + (leute && leute.length ? 1 : 0);
@@ -9592,7 +9613,7 @@ class OnyxStatusCard extends OnyxBase {
       subtitle: cfg.subtitle === false ? null
         : (cfg.subtitle
             || (n ? t(n === 1 ? 'st.nMessages1' : 'st.nMessages', { n }) : null)),
-      leute, head, rows, chips
+      leute, head, rows, chips, temps
     };
   }
 
@@ -9691,6 +9712,9 @@ class OnyxStatusCard extends OnyxBase {
         ${m.title ? `<div class="ft">
           <div class="ftitle">${esc(m.title)}</div>
           ${m.subtitle ? `<div class="fsub">${esc(m.subtitle)}</div>` : ''}
+          ${m.temps.length ? `<div class="temps">${m.temps.map((x) => `
+            <span class="tp ${x.k}" data-e="${esc(x.id)}"><ha-icon icon="${x.icon}"></ha-icon
+            >${esc(x.v)}</span>`).join('<span class="sep"></span>')}</div>` : ''}
         </div>` : ''}
         ${leute}
       </div>` : '';

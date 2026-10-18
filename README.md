@@ -1283,6 +1283,7 @@ chips:
 | `chips` | — | Kleinigkeiten als Pillen ganz unten |
 | `title` | — | Überschrift; ohne Titel entfällt der Kopf |
 | `subtitle` | „x Meldungen" | Eigener Text, oder `false` zum Ausblenden |
+| `temperature` (`temperatur`) | — | `inside`/`outside` (`innen`/`aussen`): zwei Sensoren, klein unter der Überschrift; Tippen öffnet den Sensor |
 | `color` | `blau` | Palette der Karte, wie bei der Raum-Karte |
 
 **Bausteine für das Bekannte.** Ein Eintrag mit `module:` weiss selbst, was er zeigt:
@@ -1782,6 +1783,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.32.0** — Status-Karte: `temperature: {inside, outside}` zeigt Innen- und Aussentemperatur klein unter der Überschrift (Tippen öffnet den Sensor)
 
 **1.31.1** — Aktionen-Karte (`shape: rail`): ausgeschaltete Schalter haben dasselbe Weiss wie Skripte und Szenen
 
