@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.32.0';
+const ONYX_VERSION = '1.33.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -84,6 +84,10 @@ const STRINGS = {
     'w.wind': 'Wind',
     'w.lux': 'Licht',
     'w.hum': 'Feuchte',
+    'w.rain': 'Regen heute',
+    'w.rainNow': 'Regnet gerade',
+    'w.wet': 'Regnet',
+    'w.dry': 'Trocken',
     'w.daily': 'Tage',
     'w.hourly': 'Stunden',
     'w.today': 'Heute',
@@ -666,6 +670,10 @@ const STRINGS = {
     'w.wind': 'Wind',
     'w.lux': 'Light',
     'w.hum': 'Humidity',
+    'w.rain': 'Rain today',
+    'w.rainNow': 'Raining now',
+    'w.wet': 'Raining',
+    'w.dry': 'Dry',
     'w.daily': 'Days',
     'w.hourly': 'Hours',
     'w.today': 'Today',
@@ -7106,7 +7114,9 @@ const WX_VALS = [
   { key: 'temperature', icon: 'mdi:thermometer', lab: 'w.temp' },
   { key: 'wind', icon: 'mdi:weather-windy', lab: 'w.wind' },
   { key: 'illuminance', icon: 'mdi:white-balance-sunny', lab: 'w.lux' },
-  { key: 'humidity', icon: 'mdi:water-percent', lab: 'w.hum' }
+  { key: 'humidity', icon: 'mdi:water-percent', lab: 'w.hum' },
+  // Regen gibt es nur aus der Station (rain = Menge heute, raining = Regensensor)
+  { key: 'rain', icon: 'mdi:weather-rainy', lab: 'w.rain' }
 ];
 
 /** Grad in eine Himmelsrichtung, 16 Sektoren */
@@ -7182,6 +7192,11 @@ class OnyxWeatherCard extends OnyxBase {
     .v .vl{ font-size:10px; color:#6f8497; overflow:hidden;
             text-overflow:ellipsis; white-space:nowrap; }
     ha-card.warm .v .vl{ color:var(--lab); }
+    /* Regnet es gerade, leuchtet die Regen-Zelle blau — auch auf einer
+       grauen Karte, denn genau dann will man es sehen. */
+    .v.wet .vi{ color:#7cc4ff; background:rgba(124,196,255,.14);
+                border-color:rgba(124,196,255,.30); }
+    .v.wet .vl{ color:#7cc4ff; }
 
     .divide{ height:1px; background:rgba(255,255,255,.09); }
 
@@ -7332,6 +7347,20 @@ class OnyxWeatherCard extends OnyxBase {
         text: got.text, unit: got.unit, extra: got.extra || '' };
     }).filter(Boolean);
 
+    // Der Regensensor (raining) ist keine eigene Zelle, sondern färbt die
+    // Regen-Zelle: "Regnet gerade" statt "Regen heute". Ohne Mengen-Sensor
+    // steht er allein da — dann als "Regnet" / "Trocken".
+    const wetId = this._config.raining;
+    const wetSt = wetId && this._hass.states[wetId];
+    const wet = wetSt && !isDead(wetSt) ? wetSt.state === 'on' : null;
+    const rain = vals.find((v) => v.key === 'rain');
+    if (rain && wet) {
+      rain.lab = t('w.rainNow'); rain.icon = 'mdi:weather-pouring'; rain.wet = true;
+    } else if (!rain && wet != null) {
+      vals.push({ key: 'rain', icon: wet ? 'mdi:weather-pouring' : 'mdi:weather-rainy',
+        lab: t('w.rain').split(' ')[0], text: t(wet ? 'w.wet' : 'w.dry'), unit: '', extra: '', wet });
+    }
+
     const raw = this._forecast != null ? this._forecast : (a.forecast || []);
     const count = clamp(Number(this._config.forecast_count) || 5, 2, 8);
     const fc = this._fcOff ? [] : raw.slice(0, count).map((f, i) => {
@@ -7384,8 +7413,12 @@ class OnyxWeatherCard extends OnyxBase {
     const { cls, style } = paletteAttrs(pal || null, this._config);
     const warm = !!pal && !m.dead;
 
-    const cells = m.vals.map((v) => `
-      <div class="v">
+    // Bei ungerader Zahl nimmt die letzte Zelle die ganze Breite — sonst
+    // klafft unten rechts ein Loch.
+    const odd = m.vals.length > 2 && m.vals.length % 2 === 1;
+    const cells = m.vals.map((v, i) => `
+      <div class="v${v.wet ? ' wet' : ''}"${odd && i === m.vals.length - 1
+        ? ' style="grid-column:1/-1"' : ''}>
         <div class="vi"><ha-icon icon="${esc(v.icon)}"></ha-icon></div>
         <div class="vt">
           <div class="vn">${esc(v.text)}<span class="vu">${esc(v.unit)}</span>${

@@ -1022,6 +1022,8 @@ temperature: sensor.station_temperatur
 humidity: sensor.station_feuchte
 wind: sensor.station_wind
 illuminance: sensor.station_lux
+rain: sensor.station_regen_heute      # Regenmenge heute (mm)
+raining: binary_sensor.station_regnet # Regensensor
 ```
 
 | Option | Vorgabe | Wirkung |
@@ -1036,6 +1038,8 @@ illuminance: sensor.station_lux
 | `humidity` | vom Dienst | dito |
 | `wind` | vom Dienst | dito |
 | `illuminance` | — | **Nur** aus der eigenen Station — Wetterdienste liefern keine Beleuchtungsstärke |
+| `rain` | — | Regenmenge heute, **nur** aus der eigenen Station |
+| `raining` | — | Regensensor (`binary_sensor`): solange er `on` meldet, heisst die Regen-Zelle „Regnet gerade“ und leuchtet blau. Ohne `rain` steht er allein als „Regnet“/„Trocken“ |
 | `sun` | `sun.sun` | Entscheidet, ob nachts der Mond gezeichnet wird |
 
 **Die Szene ist gezeichnet, kein Symbol.** Sonne mit kreisenden Strahlen, ziehende
@@ -1783,6 +1787,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.33.0** — Wetter-Karte: `rain` (Regenmenge heute) und `raining` (Regensensor) als fünfter Messwert; regnet es, leuchtet die Zelle blau. Bei ungerader Zahl Messwerte nimmt der letzte die ganze Breite
 
 **1.32.0** — Status-Karte: `temperature: {inside, outside}` zeigt Innen- und Aussentemperatur klein unter der Überschrift (Tippen öffnet den Sensor)
 
