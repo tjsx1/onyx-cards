@@ -1575,6 +1575,8 @@ covers:
 | `covers` (`storen`, `rollos`) | — | Storen-Kacheln |
 | `cover_style` | `tiles` | `rows` (`zeilen`): Storen als Zeilen mit Fahrknöpfen statt als Kacheln |
 | `room` am Eintrag | — | kleine Raumangabe neben dem Namen der Kachel |
+| `scenes` (`szenen`) am Eintrag | — | Szenen der Lampe fürs Halten-Menü: Liste von `script.`/`scene.`-Entitäten (je mit `name`, `icon`, `color`) oder der Name einer Liste unter `scene_sets` |
+| `scene_sets` (`szenen_sets`) | — | benannte Szenen-Listen, die sich mehrere Lampen teilen |
 | `title` | `Schnellzugriff` | Überschrift |
 | `icon` | `mdi:star-outline` | Symbol der Überschrift |
 | `tilt_script` | — | Skript für die Lamellen-Knöpfe; bekommt `store` und `modus` (`zu`/`halb`/`offen`). Ohne Skript setzen die Knöpfe den Lamellenwinkel auf 0/50/100 % |
@@ -1582,7 +1584,23 @@ covers:
 
 **Bedienung.** Kachel antippen schaltet die Lampe. **Halten** öffnet über der Karte
 die ausgeklappte Licht-Karte — Helligkeit, Farbtemperatur, Farbrad, Effekte; ein
-reiner Schalter öffnet stattdessen das Detailfenster. Eine Storen-Kachel (bzw. -Zeile) antippen
+reiner Schalter öffnet stattdessen das Detailfenster. Hat die Lampe `scenes`, steht
+darunter eine Ausklappliste **Szenen**: ein Tipp auf einen Eintrag startet das Skript
+bzw. die Szene, die zuletzt gewählte bleibt markiert (Home Assistant kennt keinen
+„aktiven“ Zustand eines Skripts). Ein Schalter mit Szenen öffnet beim Halten nur die Liste.
+
+```yaml
+scene_sets:
+  wz:
+    - entity: script.wohnzimmer_licht_glut
+      name: Glut
+      icon: mdi:fire
+      color: "#FF1E00"
+    - script.wohnzimmer_licht_weiss
+lights:
+  - entity: light.wohnzimmer
+    scenes: wz
+``` Eine Storen-Kachel (bzw. -Zeile) antippen
 fährt die Store auf bzw. zu, während der Fahrt hält ein Tipp sie an. **Halten** öffnet
 Position (ziehen oder tippen), die drei Fahrknöpfe gross und die Lamellen *Zu · Halb ·
 Offen*. Ein Tipp auf den dunklen Rand oder das ✕ schliesst das Menü.
@@ -1787,6 +1805,8 @@ Passiert es doch, meldet sich die Karte in der Browser-Konsole mit einem Hinweis
 statt einfach weiß zu bleiben.
 
 ## Änderungen
+
+**1.34.0** — Schnellzugriff-Karte: `scenes` je Lampe und `scene_sets` — Halten öffnet unter der Licht-Karte eine Ausklappliste mit Szenen/Skripten
 
 **1.33.0** — Wetter-Karte: `rain` (Regenmenge heute) und `raining` (Regensensor) als fünfter Messwert; regnet es, leuchtet die Zelle blau. Bei ungerader Zahl Messwerte nimmt der letzte die ganze Breite
 

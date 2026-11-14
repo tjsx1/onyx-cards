@@ -27,7 +27,7 @@
  *   3. Browser hart neu laden (Strg/Cmd + Shift + R)
  */
 
-const ONYX_VERSION = '1.33.0';
+const ONYX_VERSION = '1.34.0';
 
 console.info(
   `%c ONYX-CARDS %c ${ONYX_VERSION} `,
@@ -407,6 +407,8 @@ const STRINGS = {
     'qk.tilt.zu': 'Zu',
     'qk.tilt.halb': 'Halb',
     'qk.tilt.offen': 'Offen',
+    'qk.scenes': 'Szenen',
+    'qk.scenePick': 'Szene wählen',
     'log.dup': '"{tag}" ist bereits registriert — diese Datei ({v}) wird ignoriert. '
       + 'Vermutlich sind zwei Ressourcen eingetragen: die alte unter /local/ und die von '
       + 'HACS unter /hacsfiles/. Den alten Eintrag unter Einstellungen → Dashboards → ⋮ → '
@@ -992,6 +994,8 @@ const STRINGS = {
     'qk.tilt.zu': 'Closed',
     'qk.tilt.halb': 'Half',
     'qk.tilt.offen': 'Open',
+    'qk.scenes': 'Scenes',
+    'qk.scenePick': 'Choose a scene',
     'log.dup': '"{tag}" is already registered — this file ({v}) is being ignored. '
       + 'Most likely two resources are set up: the old one under /local/ and the HACS one '
       + 'under /hacsfiles/. Remove the old entry under Settings → Dashboards → ⋮ → Resources.',
@@ -12906,6 +12910,29 @@ class OnyxQuickCard extends OnyxBase {
     .tlt.on{ color:#fff; background:color-mix(in srgb, var(--btn) 50%, transparent);
              border-color:color-mix(in srgb, var(--btn) 70%, transparent); }
     .tlt.held{ transform:scale(.95); }
+
+    /* Szenen der Lampe als Ausklappliste unter der Licht-Karte. */
+    .dd{ height:44px; border-radius:12px; display:flex; align-items:center; gap:10px;
+         padding:0 12px; cursor:pointer; user-select:none; -webkit-user-select:none;
+         font-size:13px; font-weight:600; color:#e9f1f8; --mdc-icon-size:18px;
+         background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); }
+    .dd .ddn{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .dd .ddn.leer{ color:#9fb0be; font-weight:500; }
+    .dd .ddc{ color:#9fb0be; transition:transform .18s ease; }
+    .ddw.open .dd .ddc{ transform:rotate(180deg); }
+    .dot{ width:12px; height:12px; border-radius:50%; flex:none;
+          background:var(--sc, #9fb0be);
+          box-shadow:0 0 10px color-mix(in srgb, var(--sc, #9fb0be) 55%, transparent); }
+    .ddl{ display:none; margin-top:6px; max-height:264px; overflow-y:auto;
+          border-radius:12px; padding:4px;
+          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
+    .ddw.open .ddl{ display:block; }
+    .ddi{ display:flex; align-items:center; gap:10px; height:40px; padding:0 10px;
+          border-radius:9px; cursor:pointer; font-size:13px; color:#cddceb;
+          --mdc-icon-size:17px; }
+    .ddi ha-icon{ color:var(--sc, #9fb0be); }
+    .ddi.on{ color:#fff; background:color-mix(in srgb, var(--sc, #9fb0be) 22%, transparent); }
+    .ddi:active{ background:rgba(255,255,255,.08); }
     `;
   }
 
@@ -12921,6 +12948,7 @@ class OnyxQuickCard extends OnyxBase {
     if (!l.length && !c.length) throw new Error(t('err.qkEmpty'));
     this._menu = null;
     this._tiltPick = this._tiltPick || {};
+    this._scenePick = this._scenePick || {};
     super.setConfig(config);
   }
 
@@ -12932,6 +12960,22 @@ class OnyxQuickCard extends OnyxBase {
   }
   get hass() { return this._hass; }
 
+  /**
+   * Die Szenen einer Lampe: direkt als Liste am Eintrag oder als Name
+   * einer Liste unter `scene_sets` — so teilen sich mehrere Lampen eine.
+   */
+  _scenesOf(e) {
+    const cfg = this._config;
+    let s = e.scenes || e.szenen;
+    if (typeof s === 'string') s = (cfg.scene_sets || cfg.szenen_sets || {})[s];
+    return (normList(s) || []).map((x) => ({
+      id: x.entity,
+      name: x.name || nameOf(this._hass, x.entity),
+      icon: x.icon || 'mdi:palette-outline',
+      color: x.color || null
+    }));
+  }
+
   _model() {
     const h = this._hass, cfg = this._config;
     const lights = (normList(cfg.lights || cfg.lampen) || []).map((e) => {
@@ -12942,6 +12986,8 @@ class OnyxQuickCard extends OnyxBase {
       const pct = pctOf(st);
       const a = (st && st.attributes) || {};
       const modes = a.supported_color_modes || [];
+      const scenes = this._scenesOf(e);
+      const dim = d === 'light' && !dead && modes.some((x) => x !== 'onoff');
       return {
         id: e.entity,
         name: e.name || nameOf(h, e.entity),
@@ -12951,7 +12997,8 @@ class OnyxQuickCard extends OnyxBase {
         pct: on ? (pct < 0 ? 100 : pct) : 0,
         val: dead ? t('unavailable') : !on ? t('off') : (pct < 0 ? t('on') : `${pct} %`),
         glow: d === 'light' ? lightGlow(st) : null,
-        menu: d === 'light' && !dead && modes.some((x) => x !== 'onoff')
+        scenes, dim,
+        menu: dim || (!dead && scenes.length > 0)
       };
     });
 
@@ -13077,7 +13124,27 @@ class OnyxQuickCard extends OnyxBase {
             <ha-icon icon="mdi:close"></ha-icon></div>
         </div>`;
       if (m.menu.kind === 'light') {
-        ov = `<div class="ov">${bar}<div class="slot"></div></div>`;
+        const pick = it.scenes.find((x) => x.id === this._scenePick[it.id]);
+        const farbe = (x) => (x && x.color ? `style="--sc:${esc(x.color)}"` : '');
+        const szenen = it.scenes.length ? `
+          <div class="sheet">
+            <div class="plab">${esc(t('qk.scenes'))}</div>
+            <div class="ddw">
+              <div class="dd" role="button" aria-haspopup="listbox">
+                <span class="dot" ${farbe(pick)}></span>
+                <span class="ddn ${pick ? '' : 'leer'}">${esc(pick ? pick.name : t('qk.scenePick'))}</span>
+                <ha-icon class="ddc" icon="mdi:chevron-down"></ha-icon>
+              </div>
+              <div class="ddl" role="listbox">
+                ${it.scenes.map((x) => `
+                  <div class="ddi ${pick && pick.id === x.id ? 'on' : ''}" data-sc="${esc(x.id)}"
+                       role="option" ${farbe(x)}>
+                    <ha-icon icon="${esc(x.icon)}"></ha-icon><span>${esc(x.name)}</span>
+                  </div>`).join('')}
+              </div>
+            </div>
+          </div>` : '';
+        ov = `<div class="ov">${bar}${it.dim ? '<div class="slot"></div>' : ''}${szenen}</div>`;
       } else {
         ov = `
         <div class="ov">${bar}
@@ -13180,6 +13247,8 @@ class OnyxQuickCard extends OnyxBase {
     this._press(root.querySelector('.ox'), { onTap: () => this._closeMenu() });
 
     if (m.menu.kind === 'light') {
+      this._bindScenes(m.menu.it);
+      if (!m.menu.it.dim) return;
       const kind = document.createElement('onyx-light-card');
       kind.setConfig({
         type: 'custom:onyx-light-card', entity: m.menu.it.id,
@@ -13215,6 +13284,38 @@ class OnyxQuickCard extends OnyxBase {
           }
           this._repaint();
         }
+      });
+    });
+  }
+
+  /**
+   * Die Ausklappliste baut sich nicht neu auf — solange das Lampenmenü
+   * offen ist, hält die Karte still (siehe _sigOf). Also hier von Hand:
+   * Liste auf/zu, gewählte Szene markieren und starten.
+   * Gewöhnliche Klicks statt _press, damit Wischen in der Liste scrollt
+   * und nicht schon eine Szene auslöst.
+   */
+  _bindScenes(it) {
+    const root = this.shadowRoot;
+    const wrap = root.querySelector('.ddw');
+    if (!wrap) return;
+    const kopf = wrap.querySelector('.dd');
+    kopf.addEventListener('click', () => { haptic(this, 'light'); wrap.classList.toggle('open'); });
+    wrap.querySelectorAll('.ddi[data-sc]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const x = it.scenes.find((s) => s.id === el.dataset.sc);
+        if (!x) return;
+        haptic(this, 'light');
+        this._scenePick[it.id] = x.id;
+        const d = x.id.split('.')[0];
+        if (d === 'script' || d === 'scene') this.call(d, 'turn_on', { entity_id: x.id });
+        else this.call('homeassistant', 'turn_on', { entity_id: x.id });
+        wrap.querySelectorAll('.ddi').forEach((o) => o.classList.toggle('on', o === el));
+        const dot = kopf.querySelector('.dot');
+        if (x.color) dot.style.setProperty('--sc', x.color); else dot.style.removeProperty('--sc');
+        const n = kopf.querySelector('.ddn');
+        n.textContent = x.name; n.classList.remove('leer');
+        wrap.classList.remove('open');
       });
     });
   }
